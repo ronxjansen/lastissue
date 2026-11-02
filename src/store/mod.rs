@@ -138,6 +138,22 @@ pub fn fresh_id(existing: &[String]) -> (Ulid, String) {
     }
 }
 
+/// Short ID for a given (e.g. deterministic) ULID: its shortest 6–8 char
+/// suffix that does not prefix-collide with `existing`; None if even 8 do.
+pub fn short_id_for(u: Ulid, existing: &[String]) -> Option<String> {
+    let s = u.to_string().to_lowercase();
+    for len in 6..=8 {
+        let cand = &s[s.len() - len..];
+        if !existing
+            .iter()
+            .any(|e| e.starts_with(cand) || cand.starts_with(e.as_str()))
+        {
+            return Some(cand.to_string());
+        }
+    }
+    None
+}
+
 // ---------------------------------------------------------------- Layout
 
 #[derive(Debug, Clone)]

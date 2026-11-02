@@ -1,0 +1,21 @@
+---
+source: tests/import_linear.rs
+expression: text
+---
+From m05xsz@lastissue Sat Oct  3 10:00:00 2026
+Message-ID: <01M40K9K806XYZHYM2ZYM05XSZ@lastissue>
+Date: Sat, 3 Oct 2026 10:00:00 +0000
+From: Ron Jansen <ron@acme.com>
+Sender: lastissue-import
+Subject: Rounding bug again
+X-Issue-State: duplicate
+X-Priority-Level: medium
+Keywords: bug
+List-Id: billing revamp <[P].lastissue>
+References: <01M3VEG580FBEDH6KWWH38X6PS@lastissue>
+X-Linear-Id: ENG-3
+X-Linear-Url: https://linear.app/acme/issue/ENG-3
+Content-Type: text/markdown; charset=utf-8
+Content-Transfer-Encoding: 8bit
+
+Description of Rounding bug again.

@@ -1,0 +1,13 @@
+---
+source: tests/import_linear.rs
+expression: text
+---
+X-Root: [ROOT]
+X-Source: linear Billing Revamp
+List-Id: billing revamp <[P].lastissue>
+X-Imported: 3
+X-Updated: 0
+X-Skipped: 0
+38x6ps    todo         urgent  bug  Invoices round wrong
+wtb5qn    in-review    high    bug  Switch to integer cents
+m05xsz    duplicate    medium  bug  Rounding bug again

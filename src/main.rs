@@ -2,6 +2,7 @@ mod cli;
 mod dates;
 mod error;
 mod format;
+mod linear;
 mod model;
 mod store;
 
@@ -68,6 +69,7 @@ fn run(cli: Cli) -> Result<String> {
         Cmd::Project(c) => cli::project::run(&mut ctx, c)?,
         Cmd::Issue(c) => cli::issue::run(&mut ctx, c)?,
         Cmd::Comment(c) => cli::comment::run(&mut ctx, c)?,
+        Cmd::Import(c) => cli::import::run(&mut ctx, c)?,
     }
     Ok(ctx.take_output())
 }

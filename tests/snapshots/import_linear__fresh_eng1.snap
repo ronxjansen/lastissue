@@ -1,0 +1,35 @@
+---
+source: tests/import_linear.rs
+expression: text
+---
+From 38x6ps@lastissue Thu Oct  1 10:00:00 2026
+Message-ID: <01M3VEG580FBEDH6KWWH38X6PS@lastissue>
+Date: Thu, 1 Oct 2026 10:00:00 +0000
+From: Ron Jansen <ron@acme.com>
+Sender: lastissue-import
+Subject: Invoices round wrong
+X-Issue-State: todo
+X-Priority-Level: urgent
+Keywords: bug
+List-Id: billing revamp <[P].lastissue>
+X-Blocked-By: <01M3Y0WW80W6MGPY4PDDWTB5QN@lastissue>
+X-Linear-Id: ENG-1
+X-Linear-Url: https://linear.app/acme/issue/ENG-1
+Content-Type: text/markdown; charset=utf-8
+Content-Transfer-Encoding: 8bit
+
+Description of Invoices round wrong.
+
+From pdhbds@lastissue Mon Oct  5 09:00:00 2026
+Message-ID: <01M45MN5M0Z2JKVB9RV5PDHBDS@lastissue>
+Date: Mon, 5 Oct 2026 09:00:00 +0000
+From: Ann <ann@acme.com>
+Sender: lastissue-import
+Subject: Re: Invoices round wrong
+In-Reply-To: <01M3VEG580FBEDH6KWWH38X6PS@lastissue>
+References: <01M3VEG580FBEDH6KWWH38X6PS@lastissue>
+X-Linear-Comment-Id: c1
+Content-Type: text/markdown; charset=utf-8
+Content-Transfer-Encoding: 8bit
+
+Seen on EUR too.

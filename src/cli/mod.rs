@@ -3,6 +3,7 @@
 
 pub mod comment;
 pub mod common;
+pub mod import;
 pub mod issue;
 pub mod project;
 
@@ -15,7 +16,7 @@ const LONG_ABOUT: &str = "\
 A local, plaintext issue tracker. Every issue is one mbox file (opens in `mutt -f`).
 Message #1 holds the issue's current state in its headers; comments and events follow.
 
-Grammar is strictly noun-verb: lastissue <init|project|issue|comment> <verb>.
+Grammar is strictly noun-verb: lastissue <init|project|issue|comment|import> <verb>.
 Output is always mbox / RFC 5322 header blocks. Errors are header blocks on stderr.
 
 Root: --root, then $LASTISSUE_DIR, then the nearest dir with a .lastissue marker
@@ -100,6 +101,73 @@ Examples:
     /// Manage comments on an issue
     #[command(subcommand)]
     Comment(CommentCmd),
+    /// Import issues from another tracker
+    #[command(subcommand)]
+    Import(ImportCmd),
+}
+
+// ---------------------------------------------------------------- import
+
+#[derive(Subcommand, Debug)]
+pub enum ImportCmd {
+    /// Import one Linear project or team
+    #[command(long_about = "\
+Import one Linear project or team. On a terminal, missing values are prompted for;
+every prompt has a flag, and without a terminal a missing value fails fast naming it.
+The API key (a Linear personal API key) is never stored.
+
+Issues keep their original author, dates and comments (Sender: lastissue-import).
+Message-IDs are derived from the Linear issues, so re-runs find what was already
+imported (X-Linear-Id): --existing skip leaves those alone, --existing update lets
+Linear win on the fields it owns, appends/updates Linear comments in place and
+appends one update event. Nothing is ever deleted locally.
+
+Examples:
+  LINEAR_API_KEY=lin_api_… lastissue import linear --project \"Billing Revamp\" --yes
+  lastissue import linear --team ENG --into 45ae --existing update --yes
+  lastissue import linear      # interactive")]
+    Linear(Box<LinearArgs>),
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, ValueEnum)]
+pub enum Existing {
+    /// Leave already-imported issues untouched
+    Skip,
+    /// Linear wins on the fields it owns; local-only headers and comments stay
+    Update,
+}
+
+#[derive(Args, Debug)]
+pub struct LinearArgs {
+    /// Linear personal API key
+    #[arg(
+        long,
+        env = "LINEAR_API_KEY",
+        value_name = "KEY",
+        hide_env_values = true
+    )]
+    pub api_key: Option<String>,
+    /// Linear project to import: name, slug or UUID
+    #[arg(long, value_name = "NAME|SLUG|UUID", conflicts_with = "team")]
+    pub project: Option<String>,
+    /// Linear team to import, by key (e.g. ENG)
+    #[arg(long, value_name = "KEY")]
+    pub team: Option<String>,
+    /// Also list completed / cancelled Linear projects in the picker
+    #[arg(long)]
+    pub all: bool,
+    /// Import into this existing local project (id prefix)
+    #[arg(long, value_name = "P", conflicts_with = "no_project")]
+    pub into: Option<String>,
+    /// Import to the root, outside any project
+    #[arg(long)]
+    pub no_project: bool,
+    /// What to do with issues imported before [default: skip]
+    #[arg(long, value_enum, ignore_case = true, value_name = "MODE")]
+    pub existing: Option<Existing>,
+    /// Don't ask for confirmation
+    #[arg(long, short = 'y')]
+    pub yes: bool,
 }
 
 // ---------------------------------------------------------------- project

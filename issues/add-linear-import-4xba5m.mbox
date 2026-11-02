@@ -1,0 +1,124 @@
+From 4xba5m@lastissue Mon Nov  2 12:57:51 2026
+Message-ID: <01M6E1YZ7JJAC61N35864XBA5M@lastissue>
+Date: Mon, 2 Nov 2026 12:57:51 +0100
+From: Ron Jansen <ronxjansen@gmail.com>
+Subject: Add Linear import
+X-Issue-State: in-review
+X-Priority-Level: medium
+Keywords: feature, import
+Content-Type: text/markdown; charset=utf-8
+Content-Transfer-Encoding: 8bit
+
+Add `lastissue import linear`: a built-in subcommand that imports one Linear
+project or team into lastissue. Decided in a design grilling session (2026-11-02).
+
+## Command & flow
+
+Interactive on a TTY (via `inquire`), every prompt has a flag; without a TTY a
+missing value fails fast (exit 1) naming the flag. The no-prompts rule (§6.2)
+stays for the core; importer is the one carve-out.
+
+```
+? Linear API key: ********            --api-key / LINEAR_API_KEY
+  Authenticated as Ron Jansen @ Acme  (viewer query; workspace = the key's org, not a choice)
+? Import by: › Project / Team         --project <name|slug|uuid> | --team <key>
+? Project: › [fuzzy list]             completed/cancelled hidden unless --all
+? Import into: › New "billing-revamp" / Existing… / No project
+                                      --into <project> | --no-project (default: new)
+? 30 already imported › Skip / Update --existing skip|update (default skip; asked only if matches)
+? Import ~42 issues into …? (y/N)     --yes
+```
+
+## Auth
+Personal API key only. Never stored on disk. No OAuth.
+
+## Field mapping
+| Linear | lastissue |
+|---|---|
+| title | Subject |
+| description (md) | body, 1:1 |
+| createdAt | Date (original) |
+| creator | From `Name <email>` |
+| assignee | To |
+| subscribers | Cc |
+| state type | triage/backlog→backlog, unstarted→todo, started→in-progress (→in-review if name contains "review"), completed→done, canceled→cancelled, or duplicate + References if duplicateOf is in scope |
+| priority 1–4 / 0 | urgent/high/medium/low / none |
+| labels | Keywords (lowercased) |
+| dueDate | Reply-By |
+| parent/blocks/related | X-Parent / X-Blocked-By / X-Related, only if other end in scope |
+| comments | messages #2…n, original author/date, threads → In-Reply-To; X-Linear-Comment-Id |
+| identifier, url | X-Linear-Id, X-Linear-Url |
+| attachments | `[name](url)` links in body |
+| history, estimates, cycles, reactions | dropped |
+
+- Team imports: the issue's Linear project name becomes a label.
+- `Sender: lastissue-import`. No import events on fresh create.
+- Message-IDs are **deterministic** ULIDs: timestamp = createdAt, random part = hash of Linear UUID.
+
+## Re-runs (`--existing`)
+Detection: scan the root for X-Linear-Id (message #1 headers only).
+- **skip**: leave existing untouched.
+- **update**: Linear wins on fields it owns (table above); local-only headers
+  (custom X-*, Comments, Sensitivity, Expires) kept. Linear comments appended or
+  updated in place (X-Edited); local comments never touched. One
+  `X-Issue-Event: update` event listing changes. Issue stays in its current
+  folder. Deleted/out-of-scope in Linear → left alone, never deleted locally.
+
+## Fetch/write
+- Stream: fetch a page, write a page (atomic per file).
+- Relations resolved immediately thanks to deterministic IDs + scope check of the related issue.
+- Confirm shows approx count if the API offers one cheaply, else no number.
+- stderr progress per page; stdout summary block (X-Imported / X-Updated / X-Skipped) + `--brief` line per touched issue.
+- Partial failure: keep what's written; error hints `re-run with --existing skip`.
+- 429: honor Retry-After, retry a few times, then fail.
+
+## Dependencies (amend SPEC §7.1, importer only)
+`ureq` (blocking HTTP), `serde_json`, `inquire`; dev: `mockito`.
+
+## Testing
+- Unit: JSON → Msg mapping for every table row; deterministic ID stability.
+- CLI snapshots (assert_cmd + insta) against `mockito`, binary pointed via hidden
+  `LINEAR_API_URL`: fresh import, re-run skip, re-run update (assert event),
+  500 on page 2 then resume, 429 retry.
+- Prompts: manual check only (they fill the same args as flags).
+- Optional `#[ignore]` live smoke test when LINEAR_API_KEY is set.
+
+## Also
+- Update SPEC.md: new §6 grammar entry, TTY carve-out in §6.2, deps in §7.1, X-Linear-* headers.
+- `long_about` with examples per §6.6.
+
+From 07v0qp@lastissue Mon Nov  2 13:07:00 2026
+Message-ID: <01M6E2FPTKH0M92Y2BPV07V0QP@lastissue>
+Date: Mon, 2 Nov 2026 13:07:00 +0100
+From: Ron Jansen <ronxjansen@gmail.com>
+Sender: Claude Code <claude@agent>
+Subject: Re: Add Linear import
+In-Reply-To: <01M6E1YZ7JJAC61N35864XBA5M@lastissue>
+References: <01M6E1YZ7JJAC61N35864XBA5M@lastissue>
+X-Issue-Event: update
+Content-Type: text/markdown; charset=utf-8
+Content-Transfer-Encoding: 8bit
+
+state: todo → in-review
+
+From 2w9vw3@lastissue Mon Nov  2 13:07:00 2026
+Message-ID: <01M6E2FPVE4B7R6J8Z9Z2W9VW3@lastissue>
+Date: Mon, 2 Nov 2026 13:07:00 +0100
+From: Ron Jansen <ronxjansen@gmail.com>
+Sender: Claude Code <claude@agent>
+Subject: Re: Add Linear import
+In-Reply-To: <01M6E1YZ7JJAC61N35864XBA5M@lastissue>
+References: <01M6E1YZ7JJAC61N35864XBA5M@lastissue>
+X-Edited: Mon, 2 Nov 2026 13:07:11 +0100
+Content-Type: text/markdown; charset=utf-8
+Content-Transfer-Encoding: 8bit
+
+Implemented (uncommitted): src/linear/{mod,map}.rs, src/cli/import.rs, tests/import_linear.rs, SPEC.md §6.1/§6.2/§6.7/§7.1.
+
+Deviations / decisions:
+- Default "new" destination reuses a local project with the same slug, so re-runs don't create a second folder.
+- Re-run matching uses Message-ID as well as X-Linear-Id (identifiers change when issues move teams).
+- Unchanged issues under --existing update count as X-Skipped.
+- Deterministic hash: FNV-1a 64 + splitmix64 avalanche (pinned in a unit test).
+- Interactive prompts (TTY path) not yet checked by hand; live smoke test (#[ignore], needs LINEAR_API_KEY + LINEAR_SMOKE_TEAM) not yet run.
+
