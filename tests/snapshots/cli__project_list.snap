@@ -1,0 +1,11 @@
+---
+source: tests/cli.rs
+expression: text
+---
+X-Root: [ROOT]
+
+List-Id: shiny new <[P].lastissue>
+X-Short-Id: [P]
+X-Path: shiny-new-[P]/
+X-Issue-Count: 1
+X-Open-Count: 1

@@ -1,0 +1,7 @@
+---
+source: tests/cli.rs
+expression: o.stderr
+---
+Error: invalid-state
+Value: bogus
+Valid: backlog, todo, in-progress, in-review, done, cancelled, duplicate

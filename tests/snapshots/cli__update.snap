@@ -1,0 +1,38 @@
+---
+source: tests/cli.rs
+expression: text
+---
+From [A]@lastissue [ASCTIME]
+Message-ID: <[ULID]@lastissue>
+Date: [DATE]
+From: Ron <ron@example.com>
+To: claude@agent
+Subject: Login crashes when password is empty
+X-Issue-State: in-progress
+X-Priority-Level: high
+Keywords: bug, auth
+List-Id: new feature <[P].lastissue>
+X-Short-Id: [A]
+X-Path: new-feature-[P]/login-crashes-on-empty-[A].mbox
+Content-Type: text/markdown; charset=utf-8
+Content-Transfer-Encoding: 8bit
+
+>From the start
+>>From quoted
+Steps to reproduce.
+
+From [MSG]@lastissue [ASCTIME]
+Message-ID: <[ULID]@lastissue>
+Date: [DATE]
+From: Ron <ron@example.com>
+Sender: Claude Code <claude@agent>
+Subject: Re: Login crashes when password is empty
+In-Reply-To: <[ULID]@lastissue>
+References: <[ULID]@lastissue>
+X-Issue-Event: update
+Content-Type: text/markdown; charset=utf-8
+Content-Transfer-Encoding: 8bit
+
+assignee: Ron <ron@example.com> → claude@agent
+title: Login crashes on empty password → Login crashes when password is empty
+state: backlog → in-progress

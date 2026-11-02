@@ -1,0 +1,19 @@
+---
+source: tests/cli.rs
+expression: text
+---
+X-Root: [ROOT]
+
+Message-ID: <[ULID]@lastissue>
+X-Short-Id: [A]
+Date: [DATE]
+From: Ron <ron@example.com>
+To: claude@agent
+Subject: Login crashes when password is empty
+X-Issue-State: in-progress
+X-Priority-Level: high
+Keywords: bug, auth
+List-Id: new feature <[P].lastissue>
+X-Comment-Count: 2
+X-Updated: [DATE]
+X-Path: new-feature-[P]/login-crashes-on-empty-[A].mbox

@@ -1,0 +1,31 @@
+---
+source: tests/cli.rs
+expression: text
+---
+From [MSG]@lastissue [ASCTIME]
+Message-ID: <[ULID]@lastissue>
+Date: [DATE]
+From: Ron <ron@example.com>
+Subject: Re: Login crashes when password is empty
+In-Reply-To: <[ULID]@lastissue>
+References: <[ULID]@lastissue>
+X-Edited: [DATE]
+X-Comment: [A]/1
+Content-Type: text/markdown; charset=utf-8
+Content-Transfer-Encoding: 8bit
+
+Reproduced on main (debug build).
+
+From [MSG]@lastissue [ASCTIME]
+Message-ID: <[ULID]@lastissue>
+Date: [DATE]
+From: Ron <ron@example.com>
+Subject: Re: Login crashes when password is empty
+In-Reply-To: <[ULID]@lastissue>
+References: <[ULID]@lastissue> <[ULID]@lastissue>
+X-Comment: [A]/2
+X-Replying-To: ↳ replying to /1
+Content-Type: text/markdown; charset=utf-8
+Content-Transfer-Encoding: 8bit
+
+Same here.

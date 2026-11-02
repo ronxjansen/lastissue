@@ -1,0 +1,6 @@
+---
+source: tests/cli.rs
+expression: text
+---
+X-Root: [ROOT]
+[B]    todo         -       -  Blocker

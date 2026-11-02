@@ -1,0 +1,21 @@
+[package]
+name = "lastissue"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+chrono = "0.4.45"
+clap = { version = "4.6.7", features = ["derive", "env"] }
+directories = "6.0.0"
+mail-parser = "0.11.9"
+ulid = "3.0.0"
+
+[dev-dependencies]
+assert_cmd = "2.2.2"
+insta = { version = "1.49.0", features = ["filters"] }
+proptest = "1.12.0"
+tempfile = "3.27.0"
+
+[profile.dev.package]
+insta.opt-level = 3
+similar.opt-level = 3

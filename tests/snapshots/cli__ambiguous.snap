@@ -1,0 +1,6 @@
+---
+source: tests/cli.rs
+expression: o.stderr
+---
+Error: ambiguous-id
+Candidates: 7hq2mz, 7hq9ab
