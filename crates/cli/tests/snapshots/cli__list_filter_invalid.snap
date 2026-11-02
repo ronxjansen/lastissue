@@ -1,0 +1,8 @@
+---
+source: crates/cli/tests/cli.rs
+assertion_line: 93
+expression: text
+---
+Error: invalid-filter
+Token: is:fun
+Valid: state:S, p:P (priority:P), label:L, @WHO, assignee:WHO, project:P, is:ready, is:blocked, due:<DATE, due:>DATE

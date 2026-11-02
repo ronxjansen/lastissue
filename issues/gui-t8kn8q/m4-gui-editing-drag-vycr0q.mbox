@@ -1,0 +1,41 @@
+From vycr0q@lastissue Mon Nov  2 15:13:46 2026
+Message-ID: <01M6E9QTWNYZC0H2NSEKVYCR0Q@lastissue>
+Date: Mon, 2 Nov 2026 15:13:46 +0100
+From: Ron Jansen <ronxjansen@gmail.com>
+Subject: M4: GUI editing, drag and drop, saving
+X-Issue-State: todo
+Keywords: gui
+List-Id: gui <t8kn8q.lastissue>
+X-Parent: <01M6E0ZQH7HXSTPPB4PTB7H9FP@lastissue>
+X-Blocked-By: <01M6E9QTVTBAFXN07S0QJMKAMP@lastissue>
+Content-Type: text/markdown; charset=utf-8
+Content-Transfer-Encoding: 8bit
+
+See docs/GUI-SPEC.md §5.1–5.3, §11.
+
+From mjg7c0@lastissue Mon Nov  2 15:13:46 2026
+Message-ID: <01M6E9QV195NY46GSQC1MJG7C0@lastissue>
+Date: Mon, 2 Nov 2026 15:13:46 +0100
+From: Ron Jansen <ronxjansen@gmail.com>
+Subject: Re: M4: GUI editing, drag and drop, saving
+In-Reply-To: <01M6E9QTWNYZC0H2NSEKVYCR0Q@lastissue>
+References: <01M6E9QTWNYZC0H2NSEKVYCR0Q@lastissue>
+X-Issue-Event: update
+Content-Type: text/markdown; charset=utf-8
+Content-Transfer-Encoding: 8bit
+
+blocked-by: (none) → <01M6E9QTVTBAFXN07S0QJMKAMP@lastissue>
+
+From n4e75a@lastissue Mon Nov  2 15:13:46 2026
+Message-ID: <01M6E9QV6A69QSATT5BNN4E75A@lastissue>
+Date: Mon, 2 Nov 2026 15:13:46 +0100
+From: Ron Jansen <ronxjansen@gmail.com>
+Subject: Re: M4: GUI editing, drag and drop, saving
+In-Reply-To: <01M6E9QTWNYZC0H2NSEKVYCR0Q@lastissue>
+References: <01M6E9QTWNYZC0H2NSEKVYCR0Q@lastissue>
+X-Issue-Event: update
+Content-Type: text/markdown; charset=utf-8
+Content-Transfer-Encoding: 8bit
+
+parent: (none) → <01M6E0ZQH7HXSTPPB4PTB7H9FP@lastissue>
+

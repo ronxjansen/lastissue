@@ -1,0 +1,35 @@
+---
+source: crates/cli/tests/cli.rs
+assertion_line: 93
+expression: text
+---
+From [A]@lastissue [ASCTIME]
+Message-ID: <[ULID]@lastissue>
+Date: [DATE]
+From: Ron <ron@example.com>
+Subject: Coalesce me
+X-Issue-State: in-review
+Keywords: bug
+X-Edited: [DATE]
+X-Short-Id: [A]
+X-Path: coalesce-me-[A].mbox
+X-Root: [ROOT]
+X-Comment-Count: 1
+X-Updated: [DATE]
+Content-Type: text/markdown; charset=utf-8
+Content-Transfer-Encoding: 8bit
+
+Now with a body.
+
+From [MSG]@lastissue [ASCTIME]
+Message-ID: <[ULID]@lastissue>
+Date: [DATE]
+From: Ron <ron@example.com>
+Subject: Re: Coalesce me
+In-Reply-To: <[ULID]@lastissue>
+References: <[ULID]@lastissue>
+X-Comment: [A]/1
+Content-Type: text/markdown; charset=utf-8
+Content-Transfer-Encoding: 8bit
+
+Looking into it.

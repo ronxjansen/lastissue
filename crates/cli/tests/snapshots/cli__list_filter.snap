@@ -1,0 +1,21 @@
+---
+source: crates/cli/tests/cli.rs
+assertion_line: 93
+expression: text
+---
+X-Root: [ROOT]
+
+Message-ID: <[ULID]@lastissue>
+X-Short-Id: [BLOCKED]
+Date: [DATE]
+From: Ron <ron@example.com>
+To: Ron <ron@example.com>
+Subject: Login blocked
+X-Issue-State: todo
+Keywords: needs review
+X-Blocked-By: <[ULID]@lastissue>
+X-Comment-Count: 0
+X-Updated: [DATE]
+X-Match: subject: Login blocked
+X-Match-Count: 1
+X-Path: login-blocked-[BLOCKED].mbox

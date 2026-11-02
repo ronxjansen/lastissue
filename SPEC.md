@@ -317,9 +317,9 @@ lastissue issue create --title "…" [--project P]
 lastissue issue list   [--project P | --no-project] [--state S]... [--all]
                        [--label L]... [--assignee WHO] [--author WHO]
                        [--watching WHO] [--agent] [--parent ID]
-                       [--ready] [--expired] [--search TEXT]
-                       [--sort created|updated|priority|due] [--limit N]
-                       [--brief]
+                       [--ready] [--expired] [--search TEXT]... [--regex]
+                       [--sort state|created|updated|priority|due]
+                       [--limit N] [--offset N] [--brief]
 lastissue issue show   <id>
 lastissue issue update <id> [--title …] [--body … | --body-file … | -]
                        [--state S] [--priority P | --no-priority]
@@ -401,23 +401,52 @@ Everything is mbox / RFC 5322 header blocks. There is no JSON.
 - **`--brief`** prints one line per issue, e.g. `7hq2mz  todo  high  bug,auth  Login crashes…`.
 - **Mutations** print the resulting message(s) as written.
 - **Computed fields** (`X-Short-Id`, `X-Path`, `X-Comment-Count`, `X-Updated`,
-  `X-Root`) are output only and never written to disk.
-- **Truncation:** the default `--limit` is 50, and `--limit 0` means unlimited.
-  When results are truncated, a final record says so: `X-Truncated: 50 of 312`.
+  `X-Root`, `X-Match`, `X-Match-Count`, `X-Next`) are output only and never written to disk.
+- **Paging:** the default `--limit` is 50, and `--limit 0` means unlimited.
+  `--offset N` skips the first N results. When more results exist, a final
+  record says how to get the next page: `X-Next: --offset 50`. There is no
+  total count.
+- **Match context:** with `--search`, each issue block gets computed headers
+  saying where it matched:
+  ```
+  X-Match: subject: Login crashes on empty password
+  X-Match: /3: …so the empty password path hits unwrap() in auth.rs:41…
+  X-Match-Count: 5
+  ```
+  The location is `subject`, `body`, or `/n` (comment n, same addressing as
+  `comment update`). The snippet is the matching line, about 120 characters
+  centered on the hit, on one line (`…` marks a cut). At most 3 `X-Match`
+  lines per issue, but at least one per term; `X-Match-Count` is the total
+  number of matching lines. `--brief` prints no match context.
 - Colour is used only when stdout is a TTY.
 
 ### 6.4 Listing semantics
 
-- Closed issues are hidden by default and shown with `--all` or an explicit `--state`.
-- Default sort: state (`in-progress` → `in-review` → `todo` → `backlog` →
-  closed), then priority (`urgent` → `low` → none), then newest first.
+- Closed issues are hidden by default and shown with `--all` or an explicit
+  `--state`. `--search` includes closed issues unless `--state` is given.
+- Default order: sorted path order (root-level files, then each project folder;
+  filenames sorted within a folder), not raw directory order. `--sort` is
+  opt-in. `--sort state` orders by state (`in-progress` → `in-review` → `todo`
+  → `backlog` → closed), then priority (`urgent` → `low` → none), then newest
+  first.
 - "Updated" is derived as the max `Date` across all messages in the file.
-- `--search` is a case-insensitive substring match over the subject, body and all
-  comments. No regex, no ranking.
+- `--search TEXT` is repeatable; an issue must match every term (anywhere in
+  the issue). Each term is a case-insensitive literal; with `--regex` every
+  term is a regex (`regex` crate, ripgrep syntax, still case-insensitive).
+  Terms match line by line over message #1's `Subject` and the bodies of all
+  non-event messages. Headers are not searched. No ranking.
+- `--ready` resolves each blocker by turning its Message-ID into the short-ID
+  suffix of a filename, so it needs no scan of other issues.
 - Filters: `--assignee` matches `To:`, `--author` matches `From:`, `--agent` matches
   any issue with a `Sender:`, and `--watching` matches `Cc:`.
-- Performance: list filters read only up to the end of message #1's headers.
-  `--search` and `--sort updated` read whole files. There is no index.
+- Performance: there is no index or cache (§1). Files are scanned in parallel
+  in ordered batches, in path order, and the scan stops once the page
+  (`--offset` + `--limit`) is full; `--sort` and `--limit 0` scan everything.
+  List filters read only up to the end of message #1's headers. `--search`
+  first runs a byte-level regex over the raw file and skips files where any
+  term is missing; only files that pass are parsed. `X-Comment-Count` and
+  `X-Updated` are computed only for the rows printed, except with
+  `--sort updated`.
 
 ### 6.5 Errors
 
@@ -502,6 +531,7 @@ personal API key only (never stored). The workspace is the key's org.
 | Parse | `mail-parser` |
 | IDs | `ulid` |
 | Dates | `chrono`, plus a hand-rolled friendly-date parser |
+| List / search | `rayon` (parallel scan), `regex` (search terms) |
 | Global dir | `directories` |
 | Tests | `proptest`, `assert_cmd`, `insta`, `tempfile`, `mockito` |
 | Importer only | `ureq` (blocking HTTP), `serde_json`, `inquire` (TTY prompts) |

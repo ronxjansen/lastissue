@@ -1,24 +1,73 @@
-[package]
-name = "lastissue"
+[workspace]
+resolver = "3"
+members = ["crates/core", "crates/cli", "crates/gui"]
+default-members = ["crates/core", "crates/cli", "crates/gui"]
+
+[workspace.package]
 version = "0.1.0"
 edition = "2024"
+rust-version = "1.96"
 
-[dependencies]
+[workspace.dependencies]
+lastissue = { package = "lastissue-core", path = "crates/core" }
+
 chrono = "0.4.45"
 clap = { version = "4.6.7", features = ["derive", "env"] }
 directories = "6.0.0"
+futures = "0.3.34"
 inquire = "0.9.4"
 mail-parser = "0.11.9"
+notify = "8.2.0"
+rayon = "1.12.0"
+regex = "1.13.1"
 serde_json = "1.0.154"
 ulid = "3.0.0"
 ureq = "3.5.0"
 
-[dev-dependencies]
+gpui = { package = "gpui-pre", version = "=0.3.9" }
+gpui_platform = { package = "gpui-pre-platform", version = "=0.3.9" }
+gpui-component = "=0.8.0"
+
 assert_cmd = "2.2.2"
+criterion = { version = "0.8.2", default-features = false, features = ["cargo_bench_support"] }
 insta = { version = "1.49.0", features = ["filters"] }
 mockito = "1.7.2"
 proptest = "1.12.0"
 tempfile = "3.27.0"
+
+[workspace.lints.rust]
+unsafe_code = "forbid"
+
+[workspace.lints.clippy]
+pedantic = { level = "warn", priority = -1 }
+# Policy: pedantic lints we don't want.
+must_use_candidate = "allow"
+missing_errors_doc = "allow"
+missing_panics_doc = "allow"
+return_self_not_must_use = "allow"
+too_many_lines = "allow"
+struct_excessive_bools = "allow"
+# Baseline: fire on code that predates the workspace split. Remove each as the
+# code it covers is reworked (M1 moves most of it into core anyway).
+assigning_clones = "allow"
+cast_lossless = "allow"
+cast_sign_loss = "allow"
+doc_markdown = "allow"
+duration_suboptimal_units = "allow"
+explicit_iter_loop = "allow"
+format_push_string = "allow"
+if_not_else = "allow"
+ignore_without_reason = "allow"
+manual_midpoint = "allow"
+many_single_char_names = "allow"
+map_unwrap_or = "allow"
+match_same_arms = "allow"
+needless_pass_by_value = "allow"
+redundant_closure_for_method_calls = "allow"
+semicolon_if_nothing_returned = "allow"
+single_match_else = "allow"
+unreadable_literal = "allow"
+unused_self = "allow"
 
 [profile.dev.package]
 insta.opt-level = 3

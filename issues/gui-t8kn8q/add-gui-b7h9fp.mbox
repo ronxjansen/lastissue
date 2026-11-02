@@ -1,0 +1,27 @@
+From b7h9fp@lastissue Mon Nov  2 12:40:48 2026
+Message-ID: <01M6E0ZQH7HXSTPPB4PTB7H9FP@lastissue>
+Date: Mon, 2 Nov 2026 12:40:48 +0100
+From: Ron Jansen <ronxjansen@gmail.com>
+Subject: Add GUI
+X-Issue-State: backlog
+List-Id: gui <t8kn8q.lastissue>
+X-Edited: Mon, 2 Nov 2026 15:13:39 +0100
+Content-Type: text/markdown; charset=utf-8
+Content-Transfer-Encoding: 8bit
+
+Native macOS GUI on top of the Rust core. Design decisions: docs/GUI-SPEC.md. Milestones M0–M6 are tracked as issues in this project.
+
+From 0k3fj5@lastissue Mon Nov  2 15:13:46 2026
+Message-ID: <01M6E9QTRQW0VW5X779N0K3FJ5@lastissue>
+Date: Mon, 2 Nov 2026 15:13:46 +0100
+From: Ron Jansen <ronxjansen@gmail.com>
+Subject: Re: Add GUI
+In-Reply-To: <01M6E0ZQH7HXSTPPB4PTB7H9FP@lastissue>
+References: <01M6E0ZQH7HXSTPPB4PTB7H9FP@lastissue>
+X-Issue-Event: move
+Content-Type: text/markdown; charset=utf-8
+Content-Transfer-Encoding: 8bit
+
+project: (none) → gui <t8kn8q.lastissue>
+path: add-gui-b7h9fp.mbox → gui-t8kn8q/add-gui-b7h9fp.mbox
+

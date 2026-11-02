@@ -1,0 +1,41 @@
+From q2651q@lastissue Mon Nov  2 15:13:46 2026
+Message-ID: <01M6E9QTXEJHR88MPY5GQ2651Q@lastissue>
+Date: Mon, 2 Nov 2026 15:13:46 +0100
+From: Ron Jansen <ronxjansen@gmail.com>
+Subject: M5: Keyboard, command palette, search
+X-Issue-State: todo
+Keywords: gui
+List-Id: gui <t8kn8q.lastissue>
+X-Parent: <01M6E0ZQH7HXSTPPB4PTB7H9FP@lastissue>
+X-Blocked-By: <01M6E9QTWNYZC0H2NSEKVYCR0Q@lastissue>
+Content-Type: text/markdown; charset=utf-8
+Content-Transfer-Encoding: 8bit
+
+See docs/GUI-SPEC.md §6, §7, §11.
+
+From 9dpamn@lastissue Mon Nov  2 15:13:46 2026
+Message-ID: <01M6E9QV2065BXT2PAFD9DPAMN@lastissue>
+Date: Mon, 2 Nov 2026 15:13:46 +0100
+From: Ron Jansen <ronxjansen@gmail.com>
+Subject: Re: M5: Keyboard, command palette, search
+In-Reply-To: <01M6E9QTXEJHR88MPY5GQ2651Q@lastissue>
+References: <01M6E9QTXEJHR88MPY5GQ2651Q@lastissue>
+X-Issue-Event: update
+Content-Type: text/markdown; charset=utf-8
+Content-Transfer-Encoding: 8bit
+
+blocked-by: (none) → <01M6E9QTWNYZC0H2NSEKVYCR0Q@lastissue>
+
+From bhcx1z@lastissue Mon Nov  2 15:13:46 2026
+Message-ID: <01M6E9QV72W80DX1DYZ5BHCX1Z@lastissue>
+Date: Mon, 2 Nov 2026 15:13:46 +0100
+From: Ron Jansen <ronxjansen@gmail.com>
+Subject: Re: M5: Keyboard, command palette, search
+In-Reply-To: <01M6E9QTXEJHR88MPY5GQ2651Q@lastissue>
+References: <01M6E9QTXEJHR88MPY5GQ2651Q@lastissue>
+X-Issue-Event: update
+Content-Type: text/markdown; charset=utf-8
+Content-Transfer-Encoding: 8bit
+
+parent: (none) → <01M6E0ZQH7HXSTPPB4PTB7H9FP@lastissue>
+

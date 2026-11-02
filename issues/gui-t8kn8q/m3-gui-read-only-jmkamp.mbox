@@ -1,0 +1,41 @@
+From jmkamp@lastissue Mon Nov  2 15:13:46 2026
+Message-ID: <01M6E9QTVTBAFXN07S0QJMKAMP@lastissue>
+Date: Mon, 2 Nov 2026 15:13:46 +0100
+From: Ron Jansen <ronxjansen@gmail.com>
+Subject: M3: GUI read-only views and watcher
+X-Issue-State: todo
+Keywords: gui
+List-Id: gui <t8kn8q.lastissue>
+X-Parent: <01M6E0ZQH7HXSTPPB4PTB7H9FP@lastissue>
+X-Blocked-By: <01M6E9QTV1H5S9HNP937AKVAV6@lastissue>
+Content-Type: text/markdown; charset=utf-8
+Content-Transfer-Encoding: 8bit
+
+See docs/GUI-SPEC.md §3, §5, §11.
+
+From yse1m8@lastissue Mon Nov  2 15:13:46 2026
+Message-ID: <01M6E9QV0KZXVT20Z0JJYSE1M8@lastissue>
+Date: Mon, 2 Nov 2026 15:13:46 +0100
+From: Ron Jansen <ronxjansen@gmail.com>
+Subject: Re: M3: GUI read-only views and watcher
+In-Reply-To: <01M6E9QTVTBAFXN07S0QJMKAMP@lastissue>
+References: <01M6E9QTVTBAFXN07S0QJMKAMP@lastissue>
+X-Issue-Event: update
+Content-Type: text/markdown; charset=utf-8
+Content-Transfer-Encoding: 8bit
+
+blocked-by: (none) → <01M6E9QTV1H5S9HNP937AKVAV6@lastissue>
+
+From b4gfsr@lastissue Mon Nov  2 15:13:46 2026
+Message-ID: <01M6E9QV5MFZ2ZDYD3DCB4GFSR@lastissue>
+Date: Mon, 2 Nov 2026 15:13:46 +0100
+From: Ron Jansen <ronxjansen@gmail.com>
+Subject: Re: M3: GUI read-only views and watcher
+In-Reply-To: <01M6E9QTVTBAFXN07S0QJMKAMP@lastissue>
+References: <01M6E9QTVTBAFXN07S0QJMKAMP@lastissue>
+X-Issue-Event: update
+Content-Type: text/markdown; charset=utf-8
+Content-Transfer-Encoding: 8bit
+
+parent: (none) → <01M6E0ZQH7HXSTPPB4PTB7H9FP@lastissue>
+

@@ -1,0 +1,132 @@
+[
+  {
+    "bindings": {
+      "cmd-q": "lastissue::Quit"
+    }
+  },
+  {
+    "context": "Workspace",
+    "bindings": {
+      "cmd-k": "lastissue::OpenPalette",
+      "cmd-,": "lastissue::OpenSettings",
+      "cmd-1": "lastissue::SwitchRepo1",
+      "cmd-2": "lastissue::SwitchRepo2",
+      "cmd-3": "lastissue::SwitchRepo3",
+      "cmd-4": "lastissue::SwitchRepo4",
+      "cmd-5": "lastissue::SwitchRepo5",
+      "cmd-6": "lastissue::SwitchRepo6",
+      "cmd-7": "lastissue::SwitchRepo7",
+      "cmd-8": "lastissue::SwitchRepo8",
+      "cmd-9": "lastissue::SwitchRepo9"
+    }
+  },
+  {
+    "context": "Workspace && !Input",
+    "bindings": {
+      "/": "lastissue::OpenSearch",
+      "c": "lastissue::NewIssue",
+      "g i": "lastissue::GoMyIssues",
+      "g a": "lastissue::GoAllIssues",
+      "g p": "lastissue::GoProjects",
+      "g b": "lastissue::GoBoard",
+      "g l": "lastissue::GoList"
+    }
+  },
+  {
+    "context": "Issues",
+    "bindings": {
+      "down": "lastissue::CursorDown",
+      "j": "lastissue::CursorDown",
+      "up": "lastissue::CursorUp",
+      "k": "lastissue::CursorUp",
+      "o": "lastissue::OpenIssue",
+      "enter": "lastissue::OpenIssue",
+      "x": "lastissue::ToggleSelect",
+      "cmd-a": "lastissue::SelectAll",
+      "escape": "lastissue::ClearSelection",
+      "s": "lastissue::SetState",
+      "p": "lastissue::SetPriority",
+      "a": "lastissue::SetAssignee",
+      "i": "lastissue::AssignToMe",
+      "d": "lastissue::SetDue",
+      "m": "lastissue::MoveToProject",
+      "r": "lastissue::Rename",
+      "e": "lastissue::EditBody",
+      "cmd-backspace": "lastissue::DeleteIssue"
+    }
+  },
+  {
+    "context": "Issues && mode == list",
+    "bindings": {
+      "l": "lastissue::SetLabels"
+    }
+  },
+  {
+    "context": "Issues && mode == board",
+    "bindings": {
+      "left": "lastissue::ColumnPrev",
+      "h": "lastissue::ColumnPrev",
+      "right": "lastissue::ColumnNext",
+      "l": "lastissue::ColumnNext",
+      "shift-h": "lastissue::MoveCardPrev",
+      "shift-l": "lastissue::MoveCardNext"
+    }
+  },
+  {
+    "context": "IssueDetail && !Input",
+    "bindings": {
+      "down": "lastissue::CursorDown",
+      "j": "lastissue::CursorDown",
+      "up": "lastissue::CursorUp",
+      "k": "lastissue::CursorUp",
+      "escape": "lastissue::ClearSelection",
+      "s": "lastissue::SetState",
+      "p": "lastissue::SetPriority",
+      "a": "lastissue::SetAssignee",
+      "i": "lastissue::AssignToMe",
+      "l": "lastissue::SetLabels",
+      "d": "lastissue::SetDue",
+      "m": "lastissue::MoveToProject",
+      "r": "lastissue::Rename",
+      "e": "lastissue::EditBody",
+      "cmd-enter": "lastissue::CloseIssue",
+      "cmd-backspace": "lastissue::DeleteIssue"
+    }
+  },
+  {
+    "context": "IssueDetail > Input",
+    "bindings": {
+      "escape": "lastissue::ClearSelection"
+    }
+  },
+  {
+    "context": "Picker > Input",
+    "bindings": {
+      "up": "lastissue::PickerUp",
+      "down": "lastissue::PickerDown",
+      "escape": "lastissue::PickerCancel"
+    }
+  },
+  {
+    "context": "CreateModal",
+    "bindings": {
+      "cmd-enter": "lastissue::ModalSubmit",
+      "escape": "lastissue::ModalCancel"
+    }
+  },
+  {
+    "context": "CreateModal > Input",
+    "bindings": {
+      "cmd-enter": "lastissue::ModalSubmit",
+      "escape": "lastissue::ModalCancel"
+    }
+  },
+  {
+    "context": "Confirm",
+    "bindings": {
+      "enter": "lastissue::ModalSubmit",
+      "cmd-backspace": "lastissue::ModalSubmit",
+      "escape": "lastissue::ModalCancel"
+    }
+  }
+]

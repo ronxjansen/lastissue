@@ -1,0 +1,74 @@
+From 6a40w3@lastissue Mon Nov  2 16:32:06 2026
+Message-ID: <01M6EE78E23EF3QGRDJN6A40W3@lastissue>
+Date: Mon, 2 Nov 2026 16:32:06 +0100
+From: Ron Jansen <ronxjansen@gmail.com>
+Sender: Claude Code <claude@agent>
+Subject: Attachments: content-addressed .assets/ with inline images
+X-Issue-State: todo
+Keywords: feature, cli, gui
+Content-Type: text/markdown; charset=utf-8
+Content-Transfer-Encoding: 8bit
+
+Add file attachments (images rendered inline) to issues and comments, in the CLI, the GUI and the Linear importer. Decided in a design session; this replaces "Attachments: not supported in v1" (SPEC §2.5, §8, GUI-SPEC).
+
+## Storage model
+
+- **Sidecar files, never MIME parts.** The mbox stays plaintext and greppable; bodies are not encoded. Files are referenced from the markdown body.
+- **Content-addressed store at `<root>/.assets/`**, flat, created on first use. Hidden, so `Store::projects()` and the scanner already skip it.
+- **Name:** first 16 hex chars of the SHA-256 of the bytes + extension. Images: extension from magic-byte detection (png, jpeg, webp, gif, svg, …). Other files: original extension lowercased, `[a-z0-9]` only, else `.bin`. Same bytes → same file (automatic dedup). If the name exists, compare bytes and fail loudly on mismatch.
+- **Write:** temp file + rename, like every other write. Original bytes only; no resizing or re-encoding. Add `sha2` to core.
+- **Link form:** root-relative, always resolved against the issues root, never the file's own folder:
+  - images: `![crash.png](.assets/3f9a41c1e0b2d4a7.png)`
+  - other files: `[crash.log](.assets/77c0e1d2aa90b3f4.log)`
+  - alt/link text = the original filename, so it's searchable.
+  - Location-independent: survives `issue move`, `project rename`, and hand `git mv`. Nothing is ever rewritten.
+- **Any file type accepted.** Images render inline in the GUI; everything else is a link.
+- **Size cap: 10 MB**, fixed constant, no config. Above it: `Error: asset-too-large` (exit 4) with `Size:` and `Limit: 10 MB (use --force)`. `--force` overrides.
+
+## CLI
+
+- `lastissue asset add FILE...` [`--force`]: store files, print one markdown link per line (`![…]` for images, `[…]` otherwise) so they can be placed anywhere in a body.
+- `--attach FILE` (repeatable, + `--force`) on `issue create`, `issue update`, `comment create`, `comment update`: store and append the links to the body (blank line before). On `update` this is a body edit: `X-Edited`, and `body: edited` in the (coalesced) event.
+- `lastissue asset gc [--yes]`: scan every issue (all messages incl. events) for `.assets/` references; print `X-Orphan: .assets/…` per unreferenced file. Dry run by default; deletes only with `--yes`. Nothing is ever deleted implicitly (not on issue delete, comment delete or body edit).
+- `issue show` output is **unchanged**: no computed asset headers. Agents join `X-Root` + the link. The resolution rule must be spelled out in `--help` for `asset`, `issue show`, and `--attach` (SPEC §6.6).
+- `--search` matches alt text like any body text; attachment contents are not searched.
+- Errors follow §6.5 (`asset-too-large`, file not found → exit 2).
+
+## GUI
+
+- **Input (all three, v1):** ⌘V with an image on the clipboard (stored as PNG, `![pasted.png](…)`); drag & drop files from Finder onto an editor; paperclip button → native file picker. All go through the same core `asset::add` and insert the link at the cursor of the active editor (body, comment, create modal).
+- The asset is written immediately on paste/drop; if the link is removed before saving, `asset gc` cleans it up.
+- **Display:** `TextView::image_source` resolver maps `.assets/…` to `<root>/.assets/…`.
+  - Local images inline, scaled to pane width, max height 480px, aspect preserved. Click opens in the OS default app.
+  - Non-image `.assets/` links open in the OS default app.
+  - Missing file: muted "⚠ missing .assets/…" placeholder.
+  - Remote `http(s)` images are **not fetched**; rendered as a link (offline-first, no tracking).
+- The watcher should ignore `.assets/` changes (hidden path; verify).
+
+## Linear import
+
+- Download every `uploads.linear.app` URL in descriptions and comments (images and files) with the API key, store via `asset::add`, rewrite the link to `.assets/…`. Other URLs untouched. Linear "attachments" (link cards) stay `[title](url)`.
+- Failures and uploads over 10 MB (never forced) leave the URL as is. Summary gains `X-Assets: N` and `X-Asset-Failed: N`.
+- Idempotent on re-run through the hash. Mock the upload host in `mockito` tests.
+
+## Core layout
+
+- New `core::asset` module: `add(store, bytes, name, force) -> AssetRef`, detection, naming, the link-reference scanner (shared by `gc`, the importer rewrite and the GUI resolver).
+- No printing / clap in core (§7.2).
+
+## Out of scope / known limitations
+
+- mutt shows only the link, not the file.
+- Copying a single `.mbox` to another repo by hand leaves its assets behind.
+- No automatic git LFS / `.gitattributes` (never edit outside the root).
+- No in-app lightbox or thumbnails (possible later).
+- No stdin input for `asset add`.
+
+## Acceptance
+
+- SPEC.md: §2.2 layout, §2.5 attachments row, §3 / §6.1 grammar, §6.7 import table, §8 updated; GUI-SPEC updated.
+- Property tests: same bytes → same name; mismatched bytes on an existing name → error; link scanner round-trips.
+- CLI snapshots: `asset add`, `--attach` on create/update/comment, `asset gc` dry run + `--yes`, `asset-too-large`.
+- Importer test with mocked uploads (success, failure, oversize).
+- GUI: paste, drop and picker insert a link; local image renders; missing placeholder; remote shown as link.
+

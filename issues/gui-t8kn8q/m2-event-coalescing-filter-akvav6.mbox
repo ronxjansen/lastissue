@@ -1,0 +1,41 @@
+From akvav6@lastissue Mon Nov  2 15:13:46 2026
+Message-ID: <01M6E9QTV1H5S9HNP937AKVAV6@lastissue>
+Date: Mon, 2 Nov 2026 15:13:46 +0100
+From: Ron Jansen <ronxjansen@gmail.com>
+Subject: M2: Event coalescing, filter tokens, --no-events
+X-Issue-State: todo
+Keywords: gui, core
+List-Id: gui <t8kn8q.lastissue>
+X-Parent: <01M6E0ZQH7HXSTPPB4PTB7H9FP@lastissue>
+X-Blocked-By: <01M6E9QTT9KX947DNMRMBJKF1T@lastissue>
+Content-Type: text/markdown; charset=utf-8
+Content-Transfer-Encoding: 8bit
+
+See docs/GUI-SPEC.md §9. Update SPEC.md; property tests for coalescing.
+
+From dm65d0@lastissue Mon Nov  2 15:13:46 2026
+Message-ID: <01M6E9QTZVAA6FCNHDQXDM65D0@lastissue>
+Date: Mon, 2 Nov 2026 15:13:46 +0100
+From: Ron Jansen <ronxjansen@gmail.com>
+Subject: Re: M2: Event coalescing, filter tokens, --no-events
+In-Reply-To: <01M6E9QTV1H5S9HNP937AKVAV6@lastissue>
+References: <01M6E9QTV1H5S9HNP937AKVAV6@lastissue>
+X-Issue-Event: update
+Content-Type: text/markdown; charset=utf-8
+Content-Transfer-Encoding: 8bit
+
+blocked-by: (none) → <01M6E9QTT9KX947DNMRMBJKF1T@lastissue>
+
+From zps4yq@lastissue Mon Nov  2 15:13:46 2026
+Message-ID: <01M6E9QV4XMGHK0YYNQ5ZPS4YQ@lastissue>
+Date: Mon, 2 Nov 2026 15:13:46 +0100
+From: Ron Jansen <ronxjansen@gmail.com>
+Subject: Re: M2: Event coalescing, filter tokens, --no-events
+In-Reply-To: <01M6E9QTV1H5S9HNP937AKVAV6@lastissue>
+References: <01M6E9QTV1H5S9HNP937AKVAV6@lastissue>
+X-Issue-Event: update
+Content-Type: text/markdown; charset=utf-8
+Content-Transfer-Encoding: 8bit
+
+parent: (none) → <01M6E0ZQH7HXSTPPB4PTB7H9FP@lastissue>
+

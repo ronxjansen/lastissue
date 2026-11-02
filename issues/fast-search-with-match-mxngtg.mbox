@@ -1,0 +1,93 @@
+From mxngtg@lastissue Mon Nov  2 13:25:14 2026
+Message-ID: <01M6E3H33JB6RF4M01RRMXNGTG@lastissue>
+Date: Mon, 2 Nov 2026 13:25:14 +0100
+From: Ron Jansen <ronxjansen@gmail.com>
+Sender: Claude Code <claude@agent>
+Subject: Fast search with match context and paging
+X-Issue-State: done
+X-Priority-Level: medium
+Keywords: feature, search
+Content-Type: text/markdown; charset=utf-8
+Content-Transfer-Encoding: 8bit
+
+Make `issue list --search` fast at ~50k issues and show where each issue matched. Page `issue list` in path order.
+
+## Baseline (50k synthetic issues, warm cache, release build)
+
+| command | time |
+|---|---|
+| `issue list --brief --all` | 1.0s |
+| `issue list --all` | 2.0s |
+| `issue list --search zygote` | 2.8s |
+| `rg -il zygote` (same files) | 0.27s |
+
+Target: close to ripgrep. The slowness comes from a serial loop, a full `mail-parser` parse of every file, and `to_lowercase()` allocations before checking for a match at all.
+
+## Decisions
+
+**Approach**
+- **No index, no cache.** §1 stays. Speed comes from a parallel scan (`rayon`, ordered batches) plus a byte-level `regex` check that skips non-matching files. Only files that match get parsed.
+
+**Search semantics**
+- **`--search` is repeatable** and the terms are ANDed per issue (anywhere in the issue). Each term is a case-insensitive literal.
+- **`--regex`** treats every `--search` term as a regex (`regex` crate, same syntax as ripgrep). Literal mode escapes the term through the same engine.
+- **Scope:** message #1's `Subject` plus the bodies of non-event messages. Headers are not searched.
+- **`--search` includes closed issues** unless `--state` is given.
+
+**Output**
+- **Match context** is a computed header per hit:
+  ```
+  X-Match: subject: Login crashes on empty password
+  X-Match: /3: …so the empty password path hits unwrap() in auth.rs:41…
+  X-Match-Count: 5
+  ```
+  - Location is `subject`, `body`, or `/n` (comment n, same addressing as `comment update`).
+  - The snippet is the matching line, about 120 chars centered on the hit, kept to one line.
+  - At most 3 `X-Match` per issue, with at least one per term; `X-Match-Count` is the total number of matching lines.
+  - `--brief`: no snippets.
+
+**Ordering and paging (`issue list`, including search)**
+- **Default order is sorted path order** (project folder, then filename), not raw readdir order, which isn't stable. Files stream in that order and the scan stops once the page is full.
+- **`--offset N`** works alongside `--limit N` (default 50). When more results may exist, a final record gives `X-Next: --offset N`. It replaces `X-Truncated`; there is no total count.
+- **`--sort` is opt-in** and does a full scan. The old default view (state, then priority, then newest) becomes `--sort state`.
+- **Stats** (`X-Comment-Count`, `X-Updated`) are computed only for the rows returned, except with `--sort updated`.
+- **`--ready`** resolves each blocker by turning its Message-ID into the short-ID suffix of the filename, so it needs no full scan.
+
+## Spec updates
+- §6.1: add `--offset` and `--regex`; `--search` becomes repeatable; add `--sort state`.
+- §6.3: add `X-Match`, `X-Match-Count` and `X-Next` (replacing `X-Truncated`).
+- §6.4: new default order, search semantics, the closed-issue rule for search, and the performance paragraph.
+- §8: unchanged (still no full-text index).
+
+## Out of scope (later)
+- Resolving a Linear ID (`ENG-123`) where an issue ID is expected
+- `--commenter WHO` filter
+- NOT terms
+
+From rbn3rh@lastissue Mon Nov  2 13:37:46 2026
+Message-ID: <01M6E481T3JZKN6DWHPWRBN3RH@lastissue>
+Date: Mon, 2 Nov 2026 13:37:46 +0100
+From: Ron Jansen <ronxjansen@gmail.com>
+Sender: Claude Code <claude@agent>
+Subject: Re: Fast search with match context and paging
+In-Reply-To: <01M6E3H33JB6RF4M01RRMXNGTG@lastissue>
+References: <01M6E3H33JB6RF4M01RRMXNGTG@lastissue>
+X-Issue-Event: update
+Content-Type: text/markdown; charset=utf-8
+Content-Transfer-Encoding: 8bit
+
+state: backlog → done
+
+From mah4xd@lastissue Mon Nov  2 13:37:46 2026
+Message-ID: <01M6E481T3XWNPYCG2Z0MAH4XD@lastissue>
+Date: Mon, 2 Nov 2026 13:37:46 +0100
+From: Ron Jansen <ronxjansen@gmail.com>
+Sender: Claude Code <claude@agent>
+Subject: Re: Fast search with match context and paging
+In-Reply-To: <01M6E3H33JB6RF4M01RRMXNGTG@lastissue>
+References: <01M6E3H33JB6RF4M01RRMXNGTG@lastissue>
+Content-Type: text/markdown; charset=utf-8
+Content-Transfer-Encoding: 8bit
+
+Implemented: parallel ordered scan with a byte-level regex prefilter, repeatable --search with --regex, X-Match context, path order with --offset/X-Next, --sort state. 50k issues: --search 1.82s → 0.39s (rg 0.27s), list 1.96s → 0.14s.
+

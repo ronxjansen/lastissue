@@ -1,0 +1,819 @@
+//! CLI snapshot tests against a temp root (§7.3).
+
+use assert_cmd::Command;
+use std::fs;
+use std::path::{Path, PathBuf};
+use tempfile::TempDir;
+
+/// The binary with the repo registry redirected away from the real one
+/// (`init` auto-registers). Tests that inspect the registry override it.
+fn bin() -> Command {
+    let mut cmd = Command::cargo_bin("lastissue").unwrap();
+    cmd.env(
+        "LASTISSUE_REPOS",
+        Path::new(env!("CARGO_TARGET_TMPDIR")).join("test-repos"),
+    );
+    cmd
+}
+
+struct Env {
+    dir: TempDir,
+    ids: Vec<(String, String)>,
+}
+
+struct Out {
+    stdout: String,
+    stderr: String,
+    code: i32,
+}
+
+impl Env {
+    fn new() -> Self {
+        let env = Env {
+            dir: TempDir::new().unwrap(),
+            ids: Vec::new(),
+        };
+        let out = env.run(&["init"], None);
+        assert_eq!(out.code, 0, "{}", out.stderr);
+        env
+    }
+
+    fn root(&self) -> &Path {
+        self.dir.path()
+    }
+
+    fn run(&self, args: &[&str], stdin: Option<&str>) -> Out {
+        let mut cmd = bin();
+        cmd.current_dir(self.root())
+            .env("LASTISSUE_DIR", self.root())
+            .env("LASTISSUE_FROM", "Ron <ron@example.com>")
+            .env_remove("LASTISSUE_SENDER")
+            .env("NO_COLOR", "1")
+            .args(args)
+            .write_stdin(stdin.unwrap_or(""));
+        let o = cmd.output().unwrap();
+        Out {
+            stdout: String::from_utf8(o.stdout).unwrap(),
+            stderr: String::from_utf8(o.stderr).unwrap(),
+            code: o.status.code().unwrap(),
+        }
+    }
+
+    /// Run, expect success, return stdout.
+    fn ok(&self, args: &[&str]) -> String {
+        let o = self.run(args, None);
+        assert_eq!(o.code, 0, "args {args:?} failed:\n{}", o.stderr);
+        o.stdout
+    }
+
+    /// Remember an ID under a stable placeholder for snapshots.
+    fn name(&mut self, id: &str, label: &str) {
+        self.ids.push((id.to_string(), format!("[{label}]")));
+    }
+
+    fn snap(&self, name: &str, text: &str) {
+        let mut s = insta::Settings::clone_current();
+        s.add_filter(&regex_escape(&self.root().display().to_string()), "[ROOT]");
+        // ULIDs first, so a short ID can't match inside one.
+        s.add_filter(r"[0-9A-HJKMNP-TV-Z]{26}", "[ULID]");
+        for (id, label) in &self.ids {
+            s.add_filter(id, label.as_str());
+        }
+        s.add_filter(
+            r"(?m)^From [0-9a-hjkmnp-tv-z]{6}@lastissue",
+            "From [MSG]@lastissue",
+        );
+        s.add_filter(
+            r"@lastissue \w{3} \w{3} [ \d]\d \d\d:\d\d:\d\d \d{4}",
+            "@lastissue [ASCTIME]",
+        );
+        s.add_filter(
+            r"\w{3}, \d{1,2} \w{3} \d{4} \d\d:\d\d:\d\d [+-]\d{4}",
+            "[DATE]",
+        );
+        s.bind(|| insta::assert_snapshot!(name, text));
+    }
+}
+
+fn regex_escape(s: &str) -> String {
+    s.chars()
+        .flat_map(|c| {
+            if "\\.+*?()|[]{}^$".contains(c) {
+                vec!['\\', c]
+            } else {
+                vec![c]
+            }
+        })
+        .collect()
+}
+
+/// `X-Short-Id: abc123` from mutation output.
+fn short_id(out: &str) -> String {
+    out.lines()
+        .find_map(|l| l.strip_prefix("X-Short-Id: "))
+        .expect("X-Short-Id in output")
+        .to_string()
+}
+
+fn issue_file(root: &Path, id: &str) -> PathBuf {
+    fn walk(dir: &Path, id: &str) -> Option<PathBuf> {
+        for e in fs::read_dir(dir).ok()? {
+            let p = e.ok()?.path();
+            if p.is_dir() {
+                if let Some(f) = walk(&p, id) {
+                    return Some(f);
+                }
+            } else if p.to_string_lossy().ends_with(&format!("-{id}.mbox")) {
+                return Some(p);
+            }
+        }
+        None
+    }
+    walk(root, id).expect("issue file")
+}
+
+#[test]
+fn issue_lifecycle() {
+    let mut env = Env::new();
+    let p = short_id(&env.ok(&["project", "create", "New feature work"]));
+    env.name(&p, "P");
+
+    let out = env.ok(&[
+        "issue",
+        "create",
+        "--title",
+        "Login crashes on empty password",
+        "--project",
+        &p,
+        "--label",
+        "Bug, auth",
+        "--priority",
+        "hi",
+        "--assign",
+        "me",
+        "--body",
+        "From the start\n>From quoted\nSteps to reproduce.",
+    ]);
+    let a = short_id(&out);
+    env.name(&a, "A");
+    env.snap("create", &out);
+
+    // Slug is the first 4 title words; the file is valid mboxrd on disk.
+    let file = issue_file(env.root(), &a);
+    assert!(file.ends_with(format!("new-feature-{p}/login-crashes-on-empty-{a}.mbox")));
+    let raw = fs::read_to_string(&file).unwrap();
+    assert!(raw.contains("\n>From the start\n>>From quoted\n"));
+
+    let out = env.run(
+        &[
+            "--sender",
+            "Claude Code <claude@agent>",
+            "issue",
+            "update",
+            &a,
+            "--state",
+            "In Progress",
+            "--assign",
+            "claude@agent",
+            "--title",
+            "Login crashes when password is empty",
+        ],
+        None,
+    );
+    assert_eq!(out.code, 0, "{}", out.stderr);
+    env.snap("update", &out.stdout);
+    // Slug is frozen on retitle.
+    assert!(issue_file(env.root(), &a).ends_with(format!("login-crashes-on-empty-{a}.mbox")));
+
+    env.ok(&["comment", "create", &a, "--body", "Reproduced on main."]);
+    let o = env.run(
+        &[
+            "comment",
+            "create",
+            &a,
+            "--reply-to",
+            &format!("{a}/1"),
+            "-",
+        ],
+        Some("Same here.\n"),
+    );
+    assert_eq!(o.code, 0, "{}", o.stderr);
+    env.ok(&[
+        "comment",
+        "update",
+        &format!("{a}/1"),
+        "--body",
+        "Reproduced on main (debug build).",
+    ]);
+
+    env.snap("show", &env.ok(&["issue", "show", &a]));
+    env.snap("comment_list", &env.ok(&["comment", "list", &a]));
+    env.snap("list", &env.ok(&["issue", "list"]));
+
+    env.ok(&["comment", "delete", &format!("{a}/1")]);
+    let show = env.ok(&["issue", "show", &a]);
+    assert!(show.contains("X-Issue-Event: comment-deleted"));
+    assert!(show.contains("X-Replying-To: ↳ replying to (deleted)"));
+
+    let out = env.ok(&["issue", "close", &a, "--comment", "Fixed."]);
+    assert!(out.contains("state: in-progress → done"));
+    assert!(
+        env.ok(&["issue", "list", "--brief"]).lines().count() == 1,
+        "closed issues hidden"
+    );
+    assert!(env.ok(&["issue", "list", "--brief", "--all"]).contains(&a));
+
+    env.snap("reopen", &env.ok(&["issue", "reopen", &a]));
+
+    let out = env.ok(&["issue", "move", &a, "--no-project"]);
+    assert!(out.contains("X-Issue-Event: move"));
+    assert!(
+        env.root()
+            .join(format!("login-crashes-on-empty-{a}.mbox"))
+            .is_file()
+    );
+
+    env.ok(&["issue", "delete", &a]);
+    assert_eq!(env.run(&["issue", "show", &a], None).code, 2);
+}
+
+#[test]
+fn readiness_and_relations() {
+    let mut env = Env::new();
+    let blocker = short_id(&env.ok(&["issue", "create", "--title", "Blocker", "--state", "todo"]));
+    env.name(&blocker, "B");
+    let a = short_id(&env.ok(&[
+        "issue",
+        "create",
+        "--title",
+        "Blocked work",
+        "--state",
+        "todo",
+        "--blocked-by",
+        &blocker,
+        "--priority",
+        "urgent",
+    ]));
+    env.name(&a, "A");
+    let child = short_id(&env.ok(&["issue", "create", "--title", "Child", "--parent", &a]));
+    env.name(&child, "C");
+
+    env.snap(
+        "ready_before",
+        &env.ok(&["issue", "list", "--ready", "--brief"]),
+    );
+    env.ok(&["issue", "close", &blocker]);
+    env.snap(
+        "ready_after",
+        &env.ok(&["issue", "list", "--ready", "--brief"]),
+    );
+
+    assert!(
+        env.ok(&["issue", "list", "--parent", &a, "--brief"])
+            .contains(&child)
+    );
+    let out = env.ok(&["issue", "update", &a, "--unblock", &blocker]);
+    assert!(out.contains("blocked-by: <"));
+    assert_eq!(
+        env.run(&["issue", "update", &a, "--parent", &a], None).code,
+        4
+    );
+}
+
+#[test]
+fn list_filters_sort_and_truncation() {
+    let env = Env::new();
+    for (t, prio, label) in [
+        ("Low thing", "low", "x"),
+        ("Urgent thing", "urgent", "y"),
+        ("No priority", "", "x"),
+    ] {
+        let mut args = vec![
+            "issue", "create", "--title", t, "--state", "todo", "--label", label,
+        ];
+        if !prio.is_empty() {
+            args.extend(["--priority", prio]);
+        }
+        env.ok(&args);
+    }
+    env.ok(&[
+        "--sender",
+        "Bot <bot@agent>",
+        "issue",
+        "create",
+        "--title",
+        "Agent filed",
+        "--body",
+        "the needle is here",
+    ]);
+
+    let titles = |out: String| -> Vec<String> {
+        out.lines()
+            .filter(|l| !l.starts_with("X-"))
+            .map(|l| l.split("  ").last().unwrap().trim().to_string())
+            .collect()
+    };
+    // Default: path order (filename = slug-id).
+    assert_eq!(
+        titles(env.ok(&["issue", "list", "--brief"])),
+        ["Agent filed", "Low thing", "No priority", "Urgent thing"]
+    );
+    assert_eq!(
+        titles(env.ok(&["issue", "list", "--brief", "--sort", "state"])),
+        ["Urgent thing", "Low thing", "No priority", "Agent filed"]
+    );
+    assert_eq!(
+        titles(env.ok(&[
+            "issue", "list", "--brief", "--label", "x", "--sort", "priority"
+        ])),
+        ["Low thing", "No priority"]
+    );
+    assert_eq!(
+        titles(env.ok(&["issue", "list", "--brief", "--agent"])),
+        ["Agent filed"]
+    );
+    assert_eq!(
+        titles(env.ok(&["issue", "list", "--brief", "--search", "NEEDLE"])),
+        ["Agent filed"]
+    );
+    assert_eq!(
+        titles(env.ok(&["issue", "list", "--brief", "--author", "bot@agent"])),
+        Vec::<String>::new()
+    );
+    let out = env.ok(&["issue", "list", "--brief", "--limit", "2"]);
+    assert_eq!(titles(out.clone()), ["Agent filed", "Low thing"]);
+    assert!(out.ends_with("X-Next: --offset 2\n"), "{out}");
+    let out = env.ok(&["issue", "list", "--brief", "--limit", "2", "--offset", "2"]);
+    assert_eq!(titles(out.clone()), ["No priority", "Urgent thing"]);
+    assert!(!out.contains("X-Next"), "{out}");
+    let out = env.ok(&[
+        "issue", "list", "--brief", "--limit", "3", "--offset", "1", "--sort", "state",
+    ]);
+    assert_eq!(
+        titles(out.clone()),
+        ["Low thing", "No priority", "Agent filed"]
+    );
+    let out = env.ok(&["issue", "list", "--limit", "0"]);
+    assert!(out.starts_with("X-Root: "));
+    assert!(!out.contains("X-Next"));
+}
+
+#[test]
+fn search_terms_scope_and_match_context() {
+    let env = Env::new();
+    let a = short_id(&env.ok(&[
+        "issue",
+        "create",
+        "--title",
+        "Login crashes on empty password",
+        "--body",
+        "Steps:\nleave the Password empty",
+        "--label",
+        "zygote",
+    ]));
+    env.ok(&["comment", "create", &a, "--body", "Reproduced on main."]);
+    env.ok(&[
+        "comment",
+        "create",
+        &a,
+        "--body",
+        "the empty password path hits unwrap() in auth.rs:41",
+    ]);
+    env.ok(&["issue", "close", &a]);
+    env.ok(&[
+        "issue",
+        "create",
+        "--title",
+        "Unrelated",
+        "--body",
+        "password reset flow",
+    ]);
+
+    // Closed issues are included; terms are ANDed; headers are not searched.
+    let out = env.ok(&[
+        "issue",
+        "list",
+        "--search",
+        "PASSWORD",
+        "--search",
+        "reproduced",
+    ]);
+    assert!(out.contains(&format!("X-Short-Id: {a}")), "{out}");
+    assert!(!out.contains("Unrelated"), "{out}");
+    let matches: Vec<&str> = out.lines().filter(|l| l.starts_with("X-Match: ")).collect();
+    assert_eq!(
+        matches,
+        [
+            "X-Match: subject: Login crashes on empty password",
+            "X-Match: body: leave the Password empty",
+            "X-Match: /1: Reproduced on main.",
+        ]
+    );
+    assert!(out.contains("X-Match-Count: 4\n"), "{out}");
+    assert!(
+        env.ok(&["issue", "list", "--brief", "--search", "zygote"])
+            .lines()
+            .count()
+            == 1
+    );
+    assert!(
+        env.ok(&["issue", "list", "--brief", "--search", "state: todo"])
+            .lines()
+            .count()
+            == 1
+    );
+
+    // --state narrows again; --brief has no snippets.
+    let out = env.ok(&[
+        "issue", "list", "--brief", "--search", "password", "--state", "backlog",
+    ]);
+    assert!(
+        out.contains("Unrelated") && !out.contains(&a) && !out.contains("X-Match"),
+        "{out}"
+    );
+
+    // Literal vs regex.
+    assert!(
+        env.ok(&["issue", "list", "--brief", "--search", "unwrap()"])
+            .contains(&a)
+    );
+    assert!(
+        !env.ok(&["issue", "list", "--brief", "--search", r"auth\.rs:\d+"])
+            .contains(&a)
+    );
+    let out = env.ok(&["issue", "list", "--search", r"auth\.rs:\d+", "--regex"]);
+    assert!(
+        out.contains("X-Match: /2: the empty password path hits unwrap() in auth.rs:41\n"),
+        "{out}"
+    );
+    let o = env.run(&["issue", "list", "--search", "(", "--regex"], None);
+    assert_eq!(o.code, 4);
+    assert!(
+        o.stderr.starts_with("Error: invalid-regex\n"),
+        "{}",
+        o.stderr
+    );
+}
+
+#[test]
+fn errors_and_exit_codes() {
+    let env = Env::new();
+    let a = short_id(&env.ok(&["issue", "create", "--title", "One"]));
+
+    // Ambiguous prefix: two files whose IDs share a prefix.
+    let src = issue_file(env.root(), &a);
+    fs::copy(&src, env.root().join("x-7hq2mz.mbox")).unwrap();
+    fs::copy(&src, env.root().join("x-7hq9ab.mbox")).unwrap();
+    let o = env.run(&["issue", "show", "7hq"], None);
+    assert_eq!(o.code, 3);
+    insta::assert_snapshot!("ambiguous", o.stderr);
+    assert_eq!(env.run(&["issue", "show", "7hq2"], None).code, 0);
+
+    let o = env.run(&["issue", "update", &a, "--state", "bogus"], None);
+    assert_eq!(o.code, 4);
+    insta::assert_snapshot!("invalid_state", o.stderr);
+
+    let o = env.run(&["issue", "show", "zzzzzz"], None);
+    assert_eq!(o.code, 2);
+    assert!(o.stderr.starts_with("Error: issue-not-found\n"));
+
+    let o = env.run(&["issue", "frobnicate"], None);
+    assert_eq!(o.code, 1);
+    assert!(o.stderr.starts_with("Error: usage\n"));
+
+    let o = env.run(&["issue", "update", &a, "--due", "someday"], None);
+    assert_eq!(o.code, 4);
+    assert!(o.stderr.contains("Valid: YYYY-MM-DD"));
+
+    let o = env.run(
+        &["issue", "update", &a, "--header", "X-Issue-State=done"],
+        None,
+    );
+    assert_eq!(o.code, 4);
+    assert!(o.stderr.contains("Use: --state"));
+
+    let o = env.run(&["issue", "update", &a, "--state", "duplicated"], None);
+    assert_eq!(o.code, 4, "duplicate requires --duplicate-of");
+
+    let o = env.run(&["comment", "create", &a], None);
+    assert_eq!(o.code, 4, "empty piped body: {}", o.stderr);
+
+    let o = env.run(
+        &["--from", "ron", "issue", "update", &a, "--state", "todo"],
+        None,
+    );
+    assert_eq!(o.code, 4);
+    assert!(o.stderr.starts_with("Error: invalid-address\n"));
+
+    let p = short_id(&env.ok(&["project", "create", "Stuff"]));
+    env.ok(&["issue", "move", &a, "--project", &p]);
+    let o = env.run(&["project", "delete", &p], None);
+    assert_eq!(o.code, 4);
+    assert!(o.stderr.starts_with("Error: project-not-empty\n"));
+    env.ok(&["project", "delete", &p, "--force"]);
+}
+
+#[test]
+fn projects_rename_keeps_id() {
+    let mut env = Env::new();
+    let p = short_id(&env.ok(&["project", "create", "Old name here"]));
+    env.name(&p, "P");
+    let a = short_id(&env.ok(&["issue", "create", "--title", "Thing", "--project", &p]));
+    env.ok(&["project", "rename", &p, "Shiny new"]);
+    assert!(env.root().join(format!("shiny-new-{p}")).is_dir());
+    let show = env.ok(&["issue", "show", &a]);
+    assert!(show.contains(&format!("List-Id: shiny new <{p}.lastissue>")));
+    env.snap("project_list", &env.ok(&["project", "list"]));
+}
+
+#[test]
+fn root_discovery() {
+    let env = Env::new();
+    let sub = env.root().join("a/b");
+    fs::create_dir_all(&sub).unwrap();
+    let mut cmd = bin();
+    let o = cmd
+        .current_dir(&sub)
+        .env_remove("LASTISSUE_DIR")
+        .args(["issue", "list", "--brief"])
+        .write_stdin("")
+        .output()
+        .unwrap();
+    assert!(o.status.success());
+    let out = String::from_utf8(o.stdout).unwrap();
+    let canon = |p: &Path| fs::canonicalize(p).unwrap();
+    let reported = out
+        .lines()
+        .next()
+        .unwrap()
+        .strip_prefix("X-Root: ")
+        .unwrap();
+    assert_eq!(canon(Path::new(reported)), canon(env.root()));
+}
+
+#[test]
+fn issues_dir_root() {
+    let tmp = TempDir::new().unwrap();
+    let canon = |p: &Path| fs::canonicalize(p).unwrap();
+    let run = |cwd: &Path, args: &[&str]| {
+        let o = bin()
+            .current_dir(cwd)
+            .env_remove("LASTISSUE_DIR")
+            .env("LASTISSUE_FROM", "Ron <ron@example.com>")
+            .args(args)
+            .write_stdin("")
+            .output()
+            .unwrap();
+        assert!(o.status.success(), "{}", String::from_utf8_lossy(&o.stderr));
+        let out = String::from_utf8(o.stdout).unwrap();
+        PathBuf::from(
+            out.lines()
+                .next()
+                .unwrap()
+                .strip_prefix("X-Root: ")
+                .unwrap(),
+        )
+    };
+    let issues = tmp.path().join("issues");
+    fs::create_dir(&issues).unwrap();
+    // init picks ./issues when it exists
+    assert_eq!(canon(&run(tmp.path(), &["init"])), canon(&issues));
+    assert!(issues.join(".lastissue").is_file());
+    assert!(!tmp.path().join(".lastissue").exists());
+    // issues/.lastissue wins over a sibling root marker, also from a subdir
+    fs::File::create(tmp.path().join(".lastissue")).unwrap();
+    let sub = tmp.path().join("src/deep");
+    fs::create_dir_all(&sub).unwrap();
+    let got = run(&sub, &["issue", "list", "--brief"]);
+    assert_eq!(canon(&got), canon(&issues));
+}
+
+#[test]
+fn repo_registry() {
+    let tmp = TempDir::new().unwrap();
+    let t = fs::canonicalize(tmp.path()).unwrap();
+    let reg = t.join("cfg/repos");
+    let run = |cwd: &Path, args: &[&str]| {
+        let o = bin()
+            .current_dir(cwd)
+            .env("LASTISSUE_REPOS", &reg)
+            .env_remove("LASTISSUE_DIR")
+            .env("LASTISSUE_FROM", "Ron <ron@example.com>")
+            .env("NO_COLOR", "1")
+            .args(args)
+            .write_stdin("")
+            .output()
+            .unwrap();
+        Out {
+            stdout: String::from_utf8(o.stdout).unwrap(),
+            stderr: String::from_utf8(o.stderr).unwrap(),
+            code: o.status.code().unwrap(),
+        }
+    };
+    let ok = |cwd: &Path, args: &[&str]| {
+        let o = run(cwd, args);
+        assert_eq!(o.code, 0, "{args:?}: {}", o.stderr);
+        o.stdout
+    };
+    // Registered repos only; the implicit global block is always last.
+    let listed = || {
+        let out = ok(&t, &["repo", "list"]);
+        let mut blocks: Vec<&str> = out.split("\n\n").collect();
+        assert!(blocks.pop().unwrap().starts_with("X-Repo: global\n"));
+        blocks
+            .join("\n\n")
+            .replace(&t.display().to_string(), "[TMP]")
+    };
+
+    // init auto-registers; the label is the folder containing issues/.
+    let web = t.join("web");
+    fs::create_dir_all(web.join("issues")).unwrap();
+    let out = ok(&web, &["init"]);
+    assert!(out.ends_with("X-Repo: web\n"), "{out}");
+    ok(&web, &["init"]); // idempotent
+    assert_eq!(
+        fs::read_to_string(&reg).unwrap(),
+        format!("{}\n", web.join("issues").display())
+    );
+
+    // --no-register; repo add then needs a marker (exit 4 without one).
+    let worker = t.join("worker");
+    fs::create_dir_all(&worker).unwrap();
+    assert_eq!(run(&t, &["repo", "add", "worker"]).code, 4);
+    let out = ok(&worker, &["init", "--no-register"]);
+    assert!(!out.contains("X-Repo"));
+    ok(&worker, &["repo", "add"]);
+    ok(&t, &["repo", "add", "worker"]);
+    let gone = t.join("gone");
+    ok(&t, &["--root", "gone", "init"]);
+    fs::remove_dir_all(&gone).unwrap();
+    insta::assert_snapshot!("repo_list", listed());
+
+    // --repo selects a root (prefix ok) and beats LASTISSUE_DIR.
+    ok(
+        &t,
+        &["--repo", "web", "issue", "create", "--title", "In web"],
+    );
+    let o = bin()
+        .current_dir(&t)
+        .env("LASTISSUE_REPOS", &reg)
+        .env("LASTISSUE_DIR", &worker)
+        .args(["--repo", "we", "issue", "list", "--brief"])
+        .output()
+        .unwrap();
+    let out = String::from_utf8(o.stdout).unwrap();
+    assert!(out.contains("In web"), "{out}");
+    let out = ok(&t, &["--repo", "worker", "issue", "list", "--brief"]);
+    assert!(!out.contains("In web"));
+
+    let o = run(&t, &["--repo", "web", "--root", "worker", "issue", "list"]);
+    assert_eq!(o.code, 1);
+    let o = run(&t, &["--repo", "nope", "issue", "list"]);
+    assert_eq!(o.code, 2);
+    assert!(o.stderr.starts_with("Error: repo-not-found\n"));
+    assert!(
+        o.stderr.contains("Repos: web, worker, gone, global\n"),
+        "{}",
+        o.stderr
+    );
+    let o = run(&t, &["--repo", "w", "issue", "list"]);
+    assert_eq!(o.code, 3);
+    assert!(o.stderr.starts_with("Error: ambiguous-repo\n"));
+
+    // remove: by label or path; global is implicit and can't be removed.
+    assert_eq!(run(&t, &["repo", "remove", "global"]).code, 4);
+    ok(&t, &["repo", "remove", "gone"]);
+    ok(&t, &["repo", "remove", "./worker"]);
+    insta::assert_snapshot!("repo_list_after_remove", listed());
+    assert!(worker.join(".lastissue").is_file(), "files untouched");
+}
+
+#[test]
+fn event_coalescing_and_no_events() {
+    let mut env = Env::new();
+    let a = short_id(&env.ok(&["issue", "create", "--title", "Coalesce me"]));
+    env.name(&a, "A");
+
+    env.ok(&[
+        "issue",
+        "update",
+        &a,
+        "--state",
+        "todo",
+        "--priority",
+        "low",
+    ]);
+    // Same actor within 15 minutes: merged into the first event, which keeps
+    // its original "from" values; priority changed back is dropped.
+    let out = env.ok(&[
+        "issue",
+        "update",
+        &a,
+        "--state",
+        "in-progress",
+        "--no-priority",
+        "--body",
+        "Now with a body.",
+    ]);
+    env.snap("coalesced_update", &out);
+
+    // Another actor (an agent) starts its own event; a comment ends a burst.
+    env.ok(&[
+        "--sender",
+        "Claude Code <claude@agent>",
+        "issue",
+        "update",
+        &a,
+        "--add-label",
+        "bug",
+    ]);
+    env.ok(&["comment", "create", &a, "--body", "Looking into it."]);
+    env.ok(&["issue", "update", &a, "--state", "in-review"]);
+
+    let show = env.ok(&["issue", "show", &a]);
+    assert_eq!(show.matches("X-Issue-Event: update").count(), 3, "{show}");
+    env.snap(
+        "show_no_events",
+        &env.ok(&["issue", "show", &a, "--no-events"]),
+    );
+}
+
+#[test]
+fn list_filter_tokens() {
+    let mut env = Env::new();
+    let p = short_id(&env.ok(&["project", "create", "Auth work"]));
+    env.name(&p, "P");
+    let blocker = short_id(&env.ok(&[
+        "issue",
+        "create",
+        "--title",
+        "Login blocker",
+        "--project",
+        &p,
+        "--state",
+        "todo",
+        "--priority",
+        "high",
+        "--due",
+        "+2d",
+    ]));
+    env.name(&blocker, "BLOCKER");
+    let waiting = short_id(&env.ok(&[
+        "issue",
+        "create",
+        "--title",
+        "Login blocked",
+        "--state",
+        "todo",
+        "--assign",
+        "me",
+        "--label",
+        "needs review",
+        "--blocked-by",
+        &blocker,
+    ]));
+    env.name(&waiting, "BLOCKED");
+    let plain = short_id(&env.ok(&["issue", "create", "--title", "Plain"]));
+    env.name(&plain, "PLAIN");
+
+    let brief = |f: &str| env.ok(&["issue", "list", "--brief", "--filter", f]);
+    let ids = |out: &str| -> Vec<String> {
+        out.lines()
+            .skip(1)
+            .map(|l| l.split_whitespace().next().unwrap().to_string())
+            .collect()
+    };
+    assert_eq!(ids(&brief("is:blocked")), std::slice::from_ref(&waiting));
+    assert_eq!(
+        ids(&brief("is:ready p:high")),
+        std::slice::from_ref(&blocker)
+    );
+    assert_eq!(ids(&brief("@me")), std::slice::from_ref(&waiting));
+    assert_eq!(
+        ids(&brief("label:\"needs review\"")),
+        std::slice::from_ref(&waiting)
+    );
+    assert_eq!(
+        ids(&brief("project:auth due:<7d")),
+        std::slice::from_ref(&blocker)
+    );
+    assert_eq!(ids(&brief("p:none")), [waiting.clone(), plain.clone()]);
+    // Free text is a --search term (closed issues included); flags combine.
+    assert_eq!(
+        ids(&env.ok(&[
+            "issue", "list", "--brief", "--state", "todo", "--filter", "login"
+        ])),
+        [waiting.clone(), blocker.clone()]
+    );
+    env.snap(
+        "list_filter",
+        &env.ok(&["issue", "list", "--filter", "state:todo login blocked"]),
+    );
+
+    let o = env.run(&["issue", "list", "--filter", "is:fun"], None);
+    assert_eq!(o.code, 1);
+    env.snap("list_filter_invalid", &o.stderr);
+    let o = env.run(&["issue", "list", "--filter", "state:bogus"], None);
+    assert_eq!(o.code, 4);
+    assert!(o.stderr.starts_with("Error: invalid-state\n"));
+}

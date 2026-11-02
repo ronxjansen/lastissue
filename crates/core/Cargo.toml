@@ -1,0 +1,33 @@
+[package]
+name = "lastissue-core"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+
+[lib]
+name = "lastissue"
+
+[features]
+linear = ["dep:ureq", "dep:serde_json"]
+
+[dependencies]
+chrono.workspace = true
+directories.workspace = true
+mail-parser.workspace = true
+rayon.workspace = true
+regex.workspace = true
+serde_json = { workspace = true, optional = true }
+ulid.workspace = true
+ureq = { workspace = true, optional = true }
+
+[dev-dependencies]
+criterion.workspace = true
+proptest.workspace = true
+tempfile.workspace = true
+
+[[bench]]
+name = "scale"
+harness = false
+
+[lints]
+workspace = true

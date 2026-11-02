@@ -1,0 +1,26 @@
+[package]
+name = "cli"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish = false
+
+[[bin]]
+name = "lastissue"
+path = "src/main.rs"
+
+[dependencies]
+lastissue = { workspace = true, features = ["linear"] }
+chrono.workspace = true
+clap.workspace = true
+inquire.workspace = true
+
+[dev-dependencies]
+assert_cmd.workspace = true
+insta.workspace = true
+mockito.workspace = true
+serde_json.workspace = true
+tempfile.workspace = true
+
+[lints]
+workspace = true

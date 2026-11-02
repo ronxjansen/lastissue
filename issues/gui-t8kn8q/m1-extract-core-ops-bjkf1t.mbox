@@ -1,0 +1,41 @@
+From bjkf1t@lastissue Mon Nov  2 15:13:46 2026
+Message-ID: <01M6E9QTT9KX947DNMRMBJKF1T@lastissue>
+Date: Mon, 2 Nov 2026 15:13:46 +0100
+From: Ron Jansen <ronxjansen@gmail.com>
+Subject: M1: Extract core ops, query, search, identity
+X-Issue-State: todo
+Keywords: gui, refactor
+List-Id: gui <t8kn8q.lastissue>
+X-Parent: <01M6E0ZQH7HXSTPPB4PTB7H9FP@lastissue>
+X-Blocked-By: <01M6E9QTSG0YBZEDM148HEM7TD@lastissue>
+Content-Type: text/markdown; charset=utf-8
+Content-Transfer-Encoding: 8bit
+
+See docs/GUI-SPEC.md §2.1, §11. CLI becomes a thin adapter; snapshots unchanged.
+
+From s3p8t9@lastissue Mon Nov  2 15:13:46 2026
+Message-ID: <01M6E9QTZ1NW8G8Q4W23S3P8T9@lastissue>
+Date: Mon, 2 Nov 2026 15:13:46 +0100
+From: Ron Jansen <ronxjansen@gmail.com>
+Subject: Re: M1: Extract core ops, query, search, identity
+In-Reply-To: <01M6E9QTT9KX947DNMRMBJKF1T@lastissue>
+References: <01M6E9QTT9KX947DNMRMBJKF1T@lastissue>
+X-Issue-Event: update
+Content-Type: text/markdown; charset=utf-8
+Content-Transfer-Encoding: 8bit
+
+blocked-by: (none) → <01M6E9QTSG0YBZEDM148HEM7TD@lastissue>
+
+From 232ryn@lastissue Mon Nov  2 15:13:46 2026
+Message-ID: <01M6E9QV46K2XVB7Q6A3232RYN@lastissue>
+Date: Mon, 2 Nov 2026 15:13:46 +0100
+From: Ron Jansen <ronxjansen@gmail.com>
+Subject: Re: M1: Extract core ops, query, search, identity
+In-Reply-To: <01M6E9QTT9KX947DNMRMBJKF1T@lastissue>
+References: <01M6E9QTT9KX947DNMRMBJKF1T@lastissue>
+X-Issue-Event: update
+Content-Type: text/markdown; charset=utf-8
+Content-Transfer-Encoding: 8bit
+
+parent: (none) → <01M6E0ZQH7HXSTPPB4PTB7H9FP@lastissue>
+
