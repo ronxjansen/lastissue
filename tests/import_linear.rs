@@ -9,6 +9,17 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use tempfile::TempDir;
 
+/// The binary with the repo registry redirected away from the real one
+/// (`init` auto-registers). Tests that inspect the registry override it.
+fn bin() -> Command {
+    let mut cmd = Command::cargo_bin("lastissue").unwrap();
+    cmd.env(
+        "LASTISSUE_REPOS",
+        Path::new(env!("CARGO_TARGET_TMPDIR")).join("test-repos"),
+    );
+    cmd
+}
+
 struct Env {
     dir: TempDir,
     server: ServerGuard,
@@ -138,7 +149,7 @@ impl Env {
     }
 
     fn run(&self, extra: &[&str]) -> Out {
-        let mut cmd = Command::cargo_bin("lastissue").unwrap();
+        let mut cmd = bin();
         cmd.current_dir(self.root())
             .env("LASTISSUE_DIR", self.root())
             .env("LASTISSUE_FROM", "Ron <ron@example.com>")
@@ -296,8 +307,7 @@ fn rerun_update() {
     fs::write(&path, text).unwrap();
     let stem = path.file_stem().unwrap().to_string_lossy().into_owned();
     let short = stem.rsplit('-').next().unwrap();
-    let o = Command::cargo_bin("lastissue")
-        .unwrap()
+    let o = bin()
         .env("LASTISSUE_DIR", env.root())
         .env("LASTISSUE_FROM", "Ron <ron@example.com>")
         .args(["comment", "create", short, "--body", "Local note."])
@@ -378,7 +388,7 @@ fn rate_limit_retry() {
 #[test]
 fn non_tty_missing_values_fail_fast() {
     let env = Env::new();
-    let mut cmd = Command::cargo_bin("lastissue").unwrap();
+    let mut cmd = bin();
     let o = cmd
         .env("LASTISSUE_DIR", env.root())
         .env_remove("LINEAR_API_KEY")
@@ -398,7 +408,7 @@ fn non_tty_missing_values_fail_fast() {
 fn non_tty_requires_yes() {
     let mut env = Env::new();
     let _m = env.base_mocks();
-    let mut cmd = Command::cargo_bin("lastissue").unwrap();
+    let mut cmd = bin();
     let o = cmd
         .env("LASTISSUE_DIR", env.root())
         .env("LASTISSUE_FROM", "Ron <ron@example.com>")
@@ -416,7 +426,7 @@ fn non_tty_requires_yes() {
 fn unknown_project_lists_valid() {
     let mut env = Env::new();
     let _m = env.base_mocks();
-    let mut cmd = Command::cargo_bin("lastissue").unwrap();
+    let mut cmd = bin();
     let o = cmd
         .env("LASTISSUE_DIR", env.root())
         .env("LINEAR_API_URL", env.server.url())
@@ -442,8 +452,7 @@ fn live_smoke() {
     };
     let dir = TempDir::new().unwrap();
     fs::write(dir.path().join(".lastissue"), "").unwrap();
-    let o = Command::cargo_bin("lastissue")
-        .unwrap()
+    let o = bin()
         .env("LASTISSUE_DIR", dir.path())
         .env("LASTISSUE_FROM", "Smoke <smoke@example.com>")
         .env("LINEAR_API_KEY", key)

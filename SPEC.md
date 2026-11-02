@@ -16,7 +16,8 @@ people and by AI agents.
   folding, and bodies are not encoded.
 - **Never block, never surprise.** There are no prompts (the importer's TTY
   prompts are the one carve-out, §6.2), auto-commits, auto-expiry, or edits
-  outside the issues root.
+  outside the issues root, except `init` recording the root in the repo
+  registry (§2.7).
 - **No concurrency machinery.** There are no locks and no merge driver. Writes are
   atomic (temp file + rename) only so a crash can't corrupt a file.
 
@@ -28,7 +29,10 @@ people and by AI agents.
 
 The issues root is resolved in this order:
 
-1. `--root <path>` flag
+1. `--root <path>` flag, or `--repo <label>` (a registered repo, §2.7; label
+   prefixes are accepted like IDs). Passing both is a usage error (exit 1).
+   An unknown label gives exit 2 listing the labels; an ambiguous one exit 3
+   with the candidates.
 2. `LASTISSUE_DIR` env var
 3. The nearest directory containing a `.lastissue` marker, found by walking up
    from the current directory. At each level, `issues/.lastissue` is checked
@@ -40,7 +44,8 @@ The issues root is resolved in this order:
 `lastissue init` creates a local root in `./issues` if that directory exists,
 otherwise in the current directory (`--root` always uses the exact path), and
 `lastissue init --global` creates the global root. Every `list` output reports
-which root was used.
+which root was used. `init` records a local root in the repo registry unless
+`--no-register` is given.
 
 ### 2.2 Layout
 
@@ -137,6 +142,31 @@ Headers that don't apply are omitted.
 - **Writing:** a small serializer of our own. It gives full control over
   encoding, header order and mboxrd escaping. `mail-builder` is not used,
   because it emits encoded-words.
+
+### 2.7 Repo registry
+
+A plain file of issue-root paths, so a GUI (or `--repo`) can pick a repo and
+load its issues. It holds pointers only, never an index.
+
+- **Location:** `LASTISSUE_REPOS`, else `<platform config dir>/repos` (on
+  macOS the same directory as the global root; non-`.mbox` files are ignored
+  there).
+- **Format:** one canonicalized absolute root path per line, in insertion
+  order. `#` comments and blank lines are ignored and kept on rewrite. Adds are
+  idempotent; writes are atomic.
+- **Label:** the name of the folder containing `issues/`, or the root's own
+  folder name when it isn't called `issues`. Labels are not stored. A GUI
+  disambiguates collisions with the parent folder; the CLI reports them as
+  ambiguous and accepts the root path instead.
+- **Global root:** always listed implicitly, last, as `global`. It is never
+  written to the file and cannot be removed (exit 4).
+- **Missing roots** are listed with `X-Repo-Status: missing` and never pruned
+  automatically.
+- `init` registers its root (not with `--global`); cloned roots need
+  `repo add`, which accepts a root or a directory containing `issues/` and
+  fails with exit 4 when there is no `.lastissue` marker.
+- `repo remove` only edits the registry; no issue files are touched.
+- There are no cross-repo queries.
 
 ---
 
@@ -266,7 +296,11 @@ informational only; state is **never** derived from them.
 The grammar is strictly noun-verb, with no top-level aliases.
 
 ```
-lastissue init [--global]
+lastissue init [--global] [--no-register]
+
+lastissue repo list
+lastissue repo add [path]                         # default: current directory
+lastissue repo remove <label|path>
 
 lastissue project create <name>
 lastissue project list
@@ -313,7 +347,18 @@ lastissue import linear [--api-key KEY]           # or LINEAR_API_KEY
                         [--existing skip|update] [--yes]
 ```
 
-Global flags: `--root`, `--from`, `--sender`.
+Global flags: `--root`, `--repo`, `--from`, `--sender`.
+
+`repo list` prints one header block per repo:
+
+```
+X-Repo: lastissue
+X-Root: /Users/ron/Dev/rxj/lastissue/issues
+X-Repo-Status: ok
+```
+
+`repo add` / `repo remove` print the block of the repo added or removed, and
+`init` prints `X-Root` plus `X-Repo` when it registered the root.
 
 `close` sets `done`, `close --cancel` sets `cancelled`, and
 `close --duplicate-of X` sets `duplicate` and `References: X`.
@@ -465,14 +510,18 @@ No async, no database. `serde_json` is used only by the importer.
 
 ### 7.2 Layout
 
-One crate:
+One crate, split into a library (for front-ends such as a GUI) and the CLI
+binary. The library exposes `error`, `model`, `store` and `registry`
+(`load()`, `add()`, `remove()`, `resolve()`):
 
 ```
 src/
-  main.rs
+  lib.rs     # library: pub mod error, model, registry, store
+  main.rs    # binary: cli, format, linear, dates
   cli/       # clap definitions + command handlers
   model/     # Issue, Comment, Event, State, Priority, validation, normalization
   store/     # root discovery, paths, slugs, ID resolution, mbox read/write, atomic write
+  registry.rs # repo registry (§2.7)
   format/    # header-block output, --brief, error blocks
   linear/    # Linear importer: GraphQL client + JSON → message mapping
   dates.rs   # friendly date parsing
@@ -483,7 +532,9 @@ src/
 - **Round-trip property tests:** write → parse → compare must give equality. Cases
   must include `From ` and `>From ` lines in bodies, empty bodies, unicode
   everywhere, very long subjects, and many custom `X-*` headers.
-- **CLI snapshot tests:** `assert_cmd` + `insta` against a temp root.
+- **CLI snapshot tests:** `assert_cmd` + `insta` against a temp root, with
+  `LASTISSUE_REPOS` pointed at a temp file so `init` never touches the real
+  registry.
 - **Manual check:** `mutt -f` on a sample file after every format change.
 
 ### 7.4 Things to check early

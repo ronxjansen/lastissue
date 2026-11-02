@@ -16,10 +16,11 @@ const LONG_ABOUT: &str = "\
 A local, plaintext issue tracker. Every issue is one mbox file (opens in `mutt -f`).
 Message #1 holds the issue's current state in its headers; comments and events follow.
 
-Grammar is strictly noun-verb: lastissue <init|project|issue|comment|import> <verb>.
+Grammar is strictly noun-verb: lastissue <init|repo|project|issue|comment|import> <verb>.
 Output is always mbox / RFC 5322 header blocks. Errors are header blocks on stderr.
 
-Root: --root, then $LASTISSUE_DIR, then the nearest dir with a .lastissue marker
+Root: --root or --repo <label> (a registered repo, see `lastissue repo list`),
+then $LASTISSUE_DIR, then the nearest dir with a .lastissue marker
 (walking up; at each level ./issues/.lastissue wins over ./.lastissue),
 then the global root (`lastissue init --global`).
 Identity: --from, then $LASTISSUE_FROM, then git user.name/user.email, then $USER@host.
@@ -38,16 +39,24 @@ Examples:
 #[derive(Parser, Debug)]
 #[command(name = "lastissue", version, about = ABOUT, long_about = LONG_ABOUT)]
 pub struct Cli {
-    /// Issues root directory (overrides discovery)
+    /// Issues root directory (overrides discovery) [env: LASTISSUE_DIR]
     #[arg(
         long,
         global = true,
-        env = "LASTISSUE_DIR",
         value_name = "PATH",
-        help_heading = "Global options",
-        hide_env_values = true
+        help_heading = "Global options"
     )]
     pub root: Option<PathBuf>,
+
+    /// Use a registered repo by label (prefix ok; see `lastissue repo list`)
+    #[arg(
+        long,
+        global = true,
+        value_name = "LABEL",
+        help_heading = "Global options",
+        conflicts_with = "root"
+    )]
+    pub repo: Option<String>,
 
     /// Author address, "Name <email>" or "email"
     #[arg(
@@ -83,15 +92,24 @@ Create an issues root: a .lastissue marker in ./issues if that directory exists,
 otherwise in the current directory (or exactly in --root), or in the platform
 data directory with --global. Idempotent.
 
+A local root is recorded in the repo registry (see `lastissue repo`) unless
+--no-register is given. The global root is always listed and never recorded.
+
 Examples:
   lastissue init
   lastissue init --global
-  lastissue --root ~/notes/issues init")]
+  lastissue --root ~/notes/issues init --no-register")]
     Init {
         /// Create the global root instead of a local one
         #[arg(long)]
         global: bool,
+        /// Don't record the root in the repo registry
+        #[arg(long)]
+        no_register: bool,
     },
+    /// Manage the registry of known issue roots
+    #[command(subcommand)]
+    Repo(RepoCmd),
     /// Manage projects (flat folders named <slug>-<id>)
     #[command(subcommand)]
     Project(ProjectCmd),
@@ -104,6 +122,50 @@ Examples:
     /// Import issues from another tracker
     #[command(subcommand)]
     Import(ImportCmd),
+}
+
+// ---------------------------------------------------------------- repo
+
+#[derive(Subcommand, Debug)]
+pub enum RepoCmd {
+    /// List registered repos
+    #[command(long_about = "\
+List registered repos as header blocks (X-Repo, X-Root, X-Repo-Status: ok | missing).
+The label is the folder containing issues/ (or the root's own folder name). The global
+root is always listed last, as `global`. Missing roots are shown, never pruned.
+
+The registry is a plain file of root paths: $LASTISSUE_REPOS, else <config dir>/repos.
+
+Examples:
+  lastissue repo list
+  lastissue --repo web issue list --brief")]
+    List,
+    /// Register an existing root
+    #[command(long_about = "\
+Register an existing root (e.g. in a fresh clone; `init` registers automatically).
+PATH is a root or a directory containing issues/; it defaults to the current
+directory. Idempotent.
+
+Examples:
+  lastissue repo add
+  lastissue repo add ~/src/web")]
+    Add {
+        /// Root, or a directory containing issues/ [default: current directory]
+        path: Option<PathBuf>,
+    },
+    /// Unregister a repo (files are not touched)
+    #[command(long_about = "\
+Unregister a repo by label (prefix ok) or path. Nothing on disk besides the
+registry file is touched. The global root cannot be removed.
+
+Examples:
+  lastissue repo remove web
+  lastissue repo remove ~/src/old/issues")]
+    Remove {
+        /// Label (prefix ok) or root path
+        #[arg(value_name = "LABEL|PATH")]
+        repo: String,
+    },
 }
 
 // ---------------------------------------------------------------- import

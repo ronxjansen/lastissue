@@ -35,7 +35,11 @@ impl Error {
     }
 
     pub fn ambiguous(candidates: Vec<String>) -> Self {
-        Self::new(EXIT_AMBIGUOUS, "ambiguous-id").with("Candidates", candidates.join(", "))
+        Self::ambiguous_as("ambiguous-id", candidates)
+    }
+
+    pub fn ambiguous_as(kind: &str, candidates: Vec<String>) -> Self {
+        Self::new(EXIT_AMBIGUOUS, kind).with("Candidates", candidates.join(", "))
     }
 
     pub fn validation(kind: &str) -> Self {

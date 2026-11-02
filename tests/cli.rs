@@ -5,6 +5,17 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use tempfile::TempDir;
 
+/// The binary with the repo registry redirected away from the real one
+/// (`init` auto-registers). Tests that inspect the registry override it.
+fn bin() -> Command {
+    let mut cmd = Command::cargo_bin("lastissue").unwrap();
+    cmd.env(
+        "LASTISSUE_REPOS",
+        Path::new(env!("CARGO_TARGET_TMPDIR")).join("test-repos"),
+    );
+    cmd
+}
+
 struct Env {
     dir: TempDir,
     ids: Vec<(String, String)>,
@@ -32,7 +43,7 @@ impl Env {
     }
 
     fn run(&self, args: &[&str], stdin: Option<&str>) -> Out {
-        let mut cmd = Command::cargo_bin("lastissue").unwrap();
+        let mut cmd = bin();
         cmd.current_dir(self.root())
             .env("LASTISSUE_DIR", self.root())
             .env("LASTISSUE_FROM", "Ron <ron@example.com>")
@@ -406,7 +417,7 @@ fn root_discovery() {
     let env = Env::new();
     let sub = env.root().join("a/b");
     fs::create_dir_all(&sub).unwrap();
-    let mut cmd = Command::cargo_bin("lastissue").unwrap();
+    let mut cmd = bin();
     let o = cmd
         .current_dir(&sub)
         .env_remove("LASTISSUE_DIR")
@@ -431,8 +442,7 @@ fn issues_dir_root() {
     let tmp = TempDir::new().unwrap();
     let canon = |p: &Path| fs::canonicalize(p).unwrap();
     let run = |cwd: &Path, args: &[&str]| {
-        let o = Command::cargo_bin("lastissue")
-            .unwrap()
+        let o = bin()
             .current_dir(cwd)
             .env_remove("LASTISSUE_DIR")
             .env("LASTISSUE_FROM", "Ron <ron@example.com>")
@@ -442,7 +452,13 @@ fn issues_dir_root() {
             .unwrap();
         assert!(o.status.success(), "{}", String::from_utf8_lossy(&o.stderr));
         let out = String::from_utf8(o.stdout).unwrap();
-        PathBuf::from(out.lines().next().unwrap().strip_prefix("X-Root: ").unwrap())
+        PathBuf::from(
+            out.lines()
+                .next()
+                .unwrap()
+                .strip_prefix("X-Root: ")
+                .unwrap(),
+        )
     };
     let issues = tmp.path().join("issues");
     fs::create_dir(&issues).unwrap();
@@ -456,4 +472,104 @@ fn issues_dir_root() {
     fs::create_dir_all(&sub).unwrap();
     let got = run(&sub, &["issue", "list", "--brief"]);
     assert_eq!(canon(&got), canon(&issues));
+}
+
+#[test]
+fn repo_registry() {
+    let tmp = TempDir::new().unwrap();
+    let t = fs::canonicalize(tmp.path()).unwrap();
+    let reg = t.join("cfg/repos");
+    let run = |cwd: &Path, args: &[&str]| {
+        let o = bin()
+            .current_dir(cwd)
+            .env("LASTISSUE_REPOS", &reg)
+            .env_remove("LASTISSUE_DIR")
+            .env("LASTISSUE_FROM", "Ron <ron@example.com>")
+            .env("NO_COLOR", "1")
+            .args(args)
+            .write_stdin("")
+            .output()
+            .unwrap();
+        Out {
+            stdout: String::from_utf8(o.stdout).unwrap(),
+            stderr: String::from_utf8(o.stderr).unwrap(),
+            code: o.status.code().unwrap(),
+        }
+    };
+    let ok = |cwd: &Path, args: &[&str]| {
+        let o = run(cwd, args);
+        assert_eq!(o.code, 0, "{args:?}: {}", o.stderr);
+        o.stdout
+    };
+    // Registered repos only; the implicit global block is always last.
+    let listed = || {
+        let out = ok(&t, &["repo", "list"]);
+        let mut blocks: Vec<&str> = out.split("\n\n").collect();
+        assert!(blocks.pop().unwrap().starts_with("X-Repo: global\n"));
+        blocks
+            .join("\n\n")
+            .replace(&t.display().to_string(), "[TMP]")
+    };
+
+    // init auto-registers; the label is the folder containing issues/.
+    let web = t.join("web");
+    fs::create_dir_all(web.join("issues")).unwrap();
+    let out = ok(&web, &["init"]);
+    assert!(out.ends_with("X-Repo: web\n"), "{out}");
+    ok(&web, &["init"]); // idempotent
+    assert_eq!(
+        fs::read_to_string(&reg).unwrap(),
+        format!("{}\n", web.join("issues").display())
+    );
+
+    // --no-register; repo add then needs a marker (exit 4 without one).
+    let worker = t.join("worker");
+    fs::create_dir_all(&worker).unwrap();
+    assert_eq!(run(&t, &["repo", "add", "worker"]).code, 4);
+    let out = ok(&worker, &["init", "--no-register"]);
+    assert!(!out.contains("X-Repo"));
+    ok(&worker, &["repo", "add"]);
+    ok(&t, &["repo", "add", "worker"]);
+    let gone = t.join("gone");
+    ok(&t, &["--root", "gone", "init"]);
+    fs::remove_dir_all(&gone).unwrap();
+    insta::assert_snapshot!("repo_list", listed());
+
+    // --repo selects a root (prefix ok) and beats LASTISSUE_DIR.
+    ok(
+        &t,
+        &["--repo", "web", "issue", "create", "--title", "In web"],
+    );
+    let o = bin()
+        .current_dir(&t)
+        .env("LASTISSUE_REPOS", &reg)
+        .env("LASTISSUE_DIR", &worker)
+        .args(["--repo", "we", "issue", "list", "--brief"])
+        .output()
+        .unwrap();
+    let out = String::from_utf8(o.stdout).unwrap();
+    assert!(out.contains("In web"), "{out}");
+    let out = ok(&t, &["--repo", "worker", "issue", "list", "--brief"]);
+    assert!(!out.contains("In web"));
+
+    let o = run(&t, &["--repo", "web", "--root", "worker", "issue", "list"]);
+    assert_eq!(o.code, 1);
+    let o = run(&t, &["--repo", "nope", "issue", "list"]);
+    assert_eq!(o.code, 2);
+    assert!(o.stderr.starts_with("Error: repo-not-found\n"));
+    assert!(
+        o.stderr.contains("Repos: web, worker, gone, global\n"),
+        "{}",
+        o.stderr
+    );
+    let o = run(&t, &["--repo", "w", "issue", "list"]);
+    assert_eq!(o.code, 3);
+    assert!(o.stderr.starts_with("Error: ambiguous-repo\n"));
+
+    // remove: by label or path; global is implicit and can't be removed.
+    assert_eq!(run(&t, &["repo", "remove", "global"]).code, 4);
+    ok(&t, &["repo", "remove", "gone"]);
+    ok(&t, &["repo", "remove", "./worker"]);
+    insta::assert_snapshot!("repo_list_after_remove", listed());
+    assert!(worker.join(".lastissue").is_file(), "files untouched");
 }

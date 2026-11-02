@@ -31,8 +31,8 @@ fn not_initialized(root: &Path, hint: &str) -> Error {
         .with("Hint", hint)
 }
 
-/// Resolve the issues root (§2.1): `--root` / `LASTISSUE_DIR` (both arrive
-/// via `flag`), nearest `.lastissue` upwards (at each level `issues/.lastissue`
+/// Resolve the issues root (§2.1): `--root` / `--repo` / `LASTISSUE_DIR`
+/// (resolved by the caller, arriving via `flag`), nearest `.lastissue` upwards (at each level `issues/.lastissue`
 /// wins over `.lastissue`), then the global root.
 pub fn discover(flag: Option<&Path>) -> Result<PathBuf> {
     if let Some(p) = flag {

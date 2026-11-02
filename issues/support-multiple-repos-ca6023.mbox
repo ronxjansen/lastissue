@@ -4,9 +4,10 @@ Date: Mon, 2 Nov 2026 13:05:56 +0100
 From: Ron Jansen <ronxjansen@gmail.com>
 Sender: Claude Code <claude@agent>
 Subject: Support multiple repos
-X-Issue-State: todo
+X-Issue-State: in-review
 Keywords: feature
 X-Related: <01M6E0ZQH7HXSTPPB4PTB7H9FP@lastissue>
+X-Edited: Mon, 2 Nov 2026 13:18:07 +0100
 Content-Type: text/markdown; charset=utf-8
 Content-Transfer-Encoding: 8bit
 
@@ -56,11 +57,25 @@ file or `cargo test` will pollute the real registry.
 
 ## Tasks
 
-- [ ] Update SPEC.md (§1, §2.1, §6.1, §7.2)
-- [ ] Split into lib + bin
-- [ ] `registry` module + unit tests
-- [ ] `repo` subcommands
-- [ ] `--repo` global flag
-- [ ] `init` registration + `--no-register`
-- [ ] CLI snapshot tests (with `LASTISSUE_REPOS` isolated)
+- [x] Update SPEC.md (§1, §2.1, §6.1, §7.2)
+- [x] Split into lib + bin
+- [x] `registry` module + unit tests
+- [x] `repo` subcommands
+- [x] `--repo` global flag
+- [x] `init` registration + `--no-register`
+- [x] CLI snapshot tests (with `LASTISSUE_REPOS` isolated)
+
+From 2468zw@lastissue Mon Nov  2 13:18:07 2026
+Message-ID: <01M6E342JD539N2M90492468ZW@lastissue>
+Date: Mon, 2 Nov 2026 13:18:07 +0100
+From: Ron Jansen <ronxjansen@gmail.com>
+Sender: Claude Code <claude@agent>
+Subject: Re: Support multiple repos
+In-Reply-To: <01M6E2DRD0K56V1F3QCGCA6023@lastissue>
+References: <01M6E2DRD0K56V1F3QCGCA6023@lastissue>
+X-Issue-Event: update
+Content-Type: text/markdown; charset=utf-8
+Content-Transfer-Encoding: 8bit
+
+state: todo → in-review
 

@@ -1,0 +1,15 @@
+---
+source: tests/cli.rs
+expression: listed()
+---
+X-Repo: web
+X-Root: [TMP]/web/issues
+X-Repo-Status: ok
+
+X-Repo: worker
+X-Root: [TMP]/worker
+X-Repo-Status: ok
+
+X-Repo: gone
+X-Root: [TMP]/gone
+X-Repo-Status: missing

@@ -1,16 +1,15 @@
 mod cli;
 mod dates;
-mod error;
 mod format;
 mod linear;
-mod model;
-mod store;
 
 use clap::Parser;
 use clap::error::{ContextKind, ContextValue, ErrorKind};
-use cli::{Cli, Cmd, common::Ctx};
+use cli::{Cli, Cmd, RepoCmd, common::Ctx};
 use error::{Error, Result};
+use lastissue::{error, model, registry, store};
 use std::io::Write;
+use std::path::PathBuf;
 
 fn main() {
     let code = match Cli::try_parse() {
@@ -46,26 +45,70 @@ fn main() {
     std::process::exit(code);
 }
 
-fn run(cli: Cli) -> Result<String> {
-    if let Cmd::Init { global } = cli.cmd {
-        let dir = if global {
-            store::global_root()?
-        } else {
-            match &cli.root {
-                Some(r) => r.clone(),
-                None => store::default_local_root(&std::env::current_dir()?),
-            }
-        };
-        let root = store::init(&dir)?;
-        return Ok(format::block(&[(
-            "X-Root".into(),
-            root.display().to_string(),
-        )]));
+/// Explicit root (§2.1): `--root` | `--repo` (clap rejects both), then
+/// `LASTISSUE_DIR`. None means walk up, then the global root.
+fn explicit_root(cli: &Cli) -> Result<Option<PathBuf>> {
+    if let Some(r) = &cli.root {
+        return Ok(Some(r.clone()));
     }
-    let root = store::discover(cli.root.as_deref())?;
+    if let Some(label) = &cli.repo {
+        return Ok(Some(registry::resolve(label)?.root));
+    }
+    Ok(std::env::var_os("LASTISSUE_DIR")
+        .filter(|v| !v.is_empty())
+        .map(PathBuf::from))
+}
+
+fn repo_blocks<'a>(repos: impl IntoIterator<Item = &'a registry::Repo>) -> String {
+    repos
+        .into_iter()
+        .map(|r| format::block(&r.fields()))
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+fn run(cli: Cli) -> Result<String> {
+    match &cli.cmd {
+        Cmd::Init {
+            global,
+            no_register,
+        } => {
+            let dir = if *global {
+                store::global_root()?
+            } else {
+                match explicit_root(&cli)? {
+                    Some(r) => r,
+                    None => store::default_local_root(&std::env::current_dir()?),
+                }
+            };
+            let root = store::init(&dir)?;
+            let mut fields = vec![("X-Root".to_string(), root.display().to_string())];
+            if !*global && !*no_register {
+                let repo = registry::add(&root)
+                    .map_err(|e| e.with("Hint", "lastissue init --no-register"))?;
+                fields.push(("X-Repo".into(), repo.label));
+            }
+            return Ok(format::block(&fields));
+        }
+        Cmd::Repo(c) => {
+            return Ok(match c {
+                RepoCmd::List => repo_blocks(&registry::load()?),
+                RepoCmd::Add { path } => {
+                    let p = match path {
+                        Some(p) => p.clone(),
+                        None => std::env::current_dir()?,
+                    };
+                    repo_blocks([&registry::add(&p)?])
+                }
+                RepoCmd::Remove { repo } => repo_blocks([&registry::remove(repo)?]),
+            });
+        }
+        _ => {}
+    }
+    let root = store::discover(explicit_root(&cli)?.as_deref())?;
     let mut ctx = Ctx::new(root, cli.from, cli.sender);
     match cli.cmd {
-        Cmd::Init { .. } => unreachable!(),
+        Cmd::Init { .. } | Cmd::Repo(_) => unreachable!(),
         Cmd::Project(c) => cli::project::run(&mut ctx, c)?,
         Cmd::Issue(c) => cli::issue::run(&mut ctx, c)?,
         Cmd::Comment(c) => cli::comment::run(&mut ctx, c)?,

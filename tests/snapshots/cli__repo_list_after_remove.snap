@@ -1,0 +1,7 @@
+---
+source: tests/cli.rs
+expression: listed()
+---
+X-Repo: web
+X-Root: [TMP]/web/issues
+X-Repo-Status: ok
