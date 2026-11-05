@@ -28,13 +28,13 @@
 </script>
 
 {#if rows.length}
-  <VirtualList items={rows} rowHeight={36} scrollTo={cursorRow} class="h-full">
+  <VirtualList items={rows} rowHeight={40} scrollTo={cursorRow} class="h-full">
     {#snippet row(r)}
       {#if r.kind === "header"}
-        <div class="flex h-full items-center gap-2 border-b bg-muted/40 px-4 text-xs font-medium" data-group={groupKeyId(r.key)}>
+        <div class="flex h-full items-end gap-2 border-b border-rule bg-paper pb-2 pl-11 text-[12.5px] font-bold text-ink-2" data-group={groupKeyId(r.key)}>
           {#if r.key.kind === "state"}<StateIcon state={r.key.value} />{:else}<PriorityIcon priority={r.key.value} />{/if}
           {r.label}
-          <span class="text-muted-foreground tabular-nums">{r.count}</span>
+          <span class="font-mono text-[12px] font-normal text-ink-3">{r.count}</span>
         </div>
       {:else}
         {@const s = app.issues.get(r.key)}
@@ -43,7 +43,21 @@
     {/snippet}
   </VirtualList>
 {:else}
-  <div class="grid h-full place-items-center text-sm text-muted-foreground">
-    {#if !app.meta.loaded && app.meta.current !== null}Loading…{:else if app.visible.error}{app.visible.error}{:else if app.view.filter}No issues match the filter{:else}No issues here — press <kbd class="mx-1 rounded border px-1">c</kbd> to create one{/if}
+  <div class="grid h-full place-items-center text-[14px] text-ink-3">
+    {#if !app.meta.loaded && app.meta.current !== null}
+      Loading…
+    {:else if app.visible.error}
+      <span class="text-danger">{app.visible.error}</span>
+    {:else if app.view.filter}
+      <div class="text-center">
+        <p class="text-ink-2">No issues match <span class="rounded bg-wash px-1.5 py-0.5 font-mono text-[12.5px]">{app.view.filter}</span></p>
+        <p class="mt-1.5 text-[13px]">Try fewer tokens, or clear the filter in the toolbar.</p>
+      </div>
+    {:else}
+      <div class="text-center">
+        <p class="font-mono text-[13px] text-ink-3">$ ls issues/<br /><span class="opacity-70">(empty)</span></p>
+        <p class="mt-3 text-ink-2">Nothing here yet. Press <kbd class="mx-0.5 rounded border border-rule bg-sheet px-1.5 text-[12px] text-ink">c</kbd> to write the first issue.</p>
+      </div>
+    {/if}
   </div>
 {/if}

@@ -55,7 +55,7 @@
     }
   }
 
-  const selectClass = "h-7 rounded-md border bg-transparent px-2 text-xs outline-none focus-visible:ring-2 focus-visible:ring-ring/50";
+  const selectClass = "h-8 rounded-md border border-transparent bg-wash px-2.5 text-[13px] text-ink-2 outline-none transition-colors hover:bg-wash-strong focus:border-rule focus:bg-sheet";
 </script>
 
 <Dialog.Root bind:open>
@@ -67,14 +67,14 @@
     <input
       bind:value={title}
       placeholder="Issue title"
-      class="w-full bg-transparent text-lg font-medium outline-none placeholder:text-muted-foreground"
+      class="w-full bg-transparent text-[22px] leading-tight font-bold tracking-[-0.015em] outline-none placeholder:text-ink-3"
     />
     <MarkdownEditor
       value=""
       placeholder="Add a description… (markdown)"
       onchange={(md) => (body = md)}
       onsubmit={submit}
-      class="max-h-[40vh] min-h-24 overflow-y-auto text-sm"
+      class="max-h-[40vh] min-h-24 overflow-y-auto text-[15px]"
     />
     <div class="flex flex-wrap items-center gap-2">
       <label class="flex items-center gap-1.5">

@@ -5,14 +5,14 @@
   const sel = $derived(app.selection.length);
 </script>
 
-<footer class="flex h-6 shrink-0 items-center gap-3 border-t px-3 text-[11px] text-muted-foreground">
-  {#if app.meta.notice}<span class="truncate text-destructive">{app.meta.notice}</span>{/if}
-  {#if app.meta.failure}<span class="truncate text-amber-600">{app.meta.failure}</span>{/if}
+<footer class="flex h-7 shrink-0 items-center gap-4 border-t border-rule bg-rail px-4 text-[12px] text-ink-3">
+  {#if app.meta.notice}<span class="truncate text-danger">{app.meta.notice}</span>{/if}
+  {#if app.meta.failure}<span class="truncate text-warn">{app.meta.failure}</span>{/if}
   {#if app.meta.loadErrors.length}
-    <span class="truncate text-amber-600" title={app.meta.loadErrors.join("\n")}>{app.meta.loadErrors.length} unreadable file(s)</span>
+    <span class="truncate text-warn" title={app.meta.loadErrors.join("\n")}>{app.meta.loadErrors.length} unreadable file(s)</span>
   {/if}
-  {#if app.meta.error}<span class="truncate text-destructive" title={app.meta.error}>{app.meta.error}</span>{/if}
+  {#if app.meta.error}<span class="truncate text-danger" title={app.meta.error}>{app.meta.error}</span>{/if}
   <span class="flex-1"></span>
   {#if sel}<span>{sel} selected · {pretty("escape")} clear</span>{/if}
-  <span>{pretty("cmd-k")} {ACTIONS.openPalette.toLowerCase()}</span>
+  <span><kbd class="text-ink-2">{pretty("cmd-k")}</kbd> {ACTIONS.openPalette.toLowerCase()}</span>
 </footer>

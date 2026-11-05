@@ -37,22 +37,25 @@
   });
 </script>
 
-<header data-tauri-drag-region class="flex h-10 shrink-0 items-center gap-2 border-b px-3">
-  <h1 data-tauri-drag-region class="mr-1 truncate text-[13px] font-medium capitalize">{title}</h1>
-  <span class="text-xs text-muted-foreground tabular-nums">{app.visible.total}</span>
+<header data-tauri-drag-region class="flex h-11 shrink-0 items-center gap-2 border-b border-rule pr-3 pl-6">
+  <h1 data-tauri-drag-region class="max-w-48 shrink-0 truncate text-[15px] font-bold text-ink {app.view.scope.kind === 'project' ? 'capitalize' : ''}">{title}</h1>
+  <span data-tauri-drag-region class="mr-2 hidden shrink-0 font-mono text-[12px] text-ink-3 @sm:inline">{app.visible.total}</span>
+  <div class="hidden shrink-0 @sm:block">
   <ToggleGroup.Root
     type="single"
     size="sm"
-    variant="outline"
+    variant="default"
+    class="rounded-md bg-wash p-0.5"
     value={app.view.mode}
     onValueChange={(v) => v && app.setView({ mode: v as "list" | "board" })}
   >
-    <ToggleGroup.Item value="list" aria-label="List (g l)"><List class="size-3.5" /></ToggleGroup.Item>
-    <ToggleGroup.Item value="board" aria-label="Board (g b)"><Columns3 class="size-3.5" /></ToggleGroup.Item>
+    <ToggleGroup.Item value="list" aria-label="List (g l)" class="h-6 min-w-7 rounded-[5px] text-ink-3 data-[state=on]:bg-sheet data-[state=on]:text-ink data-[state=on]:shadow-[0_1px_2px_oklch(0_0_0/0.08)]"><List class="size-3.5" /></ToggleGroup.Item>
+    <ToggleGroup.Item value="board" aria-label="Board (g b)" class="h-6 min-w-7 rounded-[5px] text-ink-3 data-[state=on]:bg-sheet data-[state=on]:text-ink data-[state=on]:shadow-[0_1px_2px_oklch(0_0_0/0.08)]"><Columns3 class="size-3.5" /></ToggleGroup.Item>
   </ToggleGroup.Root>
+  </div>
 
-  <div class="relative ml-2 flex max-w-md flex-1 items-center">
-    <ListFilter class="pointer-events-none absolute left-2 size-3.5 text-muted-foreground" />
+  <div class="relative ml-1 hidden min-w-16 max-w-md flex-1 items-center @xs:flex">
+    <ListFilter class="pointer-events-none absolute left-2.5 size-3.5 text-ink-3" />
     <input
       bind:this={input}
       bind:value={filter}
@@ -65,23 +68,24 @@
           input?.blur();
         }
       }}
-      placeholder="Filter: state:todo p:high label:bug @me due:<7d text…"
+      placeholder="Filter"
       spellcheck="false"
-      class="h-7 w-full rounded-md border bg-transparent pr-7 pl-7 text-xs outline-none placeholder:text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring/40 {app.visible.error ? 'border-destructive' : ''}"
-      title={app.visible.error ?? ""}
+      class="h-8 w-full rounded-md border border-transparent bg-wash pr-8 pl-8 font-mono text-[12.5px] text-ink transition-colors outline-none placeholder:font-sans placeholder:text-[13px] placeholder:text-ink-3 hover:bg-wash-strong focus:border-rule focus:bg-sheet focus-visible:outline-none {app.visible.error ? 'border-danger! bg-danger/6' : ''}"
+      title={app.visible.error ?? "Filter tokens: state:todo  p:high  label:bug  @me  due:<7d, or any text"}
     />
     {#if app.visible.scanning}
-      <LoaderCircle class="absolute right-2 size-3.5 animate-spin text-muted-foreground" />
+      <LoaderCircle class="absolute right-2.5 size-3.5 animate-spin text-ink-3" />
     {/if}
   </div>
-  {#if app.visible.error}<span class="truncate text-xs text-destructive">{app.visible.error}</span>{/if}
+  {#if app.visible.error}<span class="truncate text-[12.5px] text-danger">{app.visible.error}</span>{/if}
 
-  <div class="ml-auto flex items-center gap-1">
+  <div class="ml-auto flex shrink-0 items-center gap-1">
+    <div class="hidden @sm:block">
     <DropdownMenu.Root>
       <DropdownMenu.Trigger>
         {#snippet child({ props })}
-          <Button {...props} variant="ghost" size="sm" class="h-7 text-xs">
-            <SlidersHorizontal class="size-3.5" /> {SORT_LABEL[app.view.sort]} · by {app.view.grouping}
+          <Button {...props} variant="ghost" size="sm" class="h-8 text-[13px] text-ink-2">
+            <SlidersHorizontal class="size-3.5" /><span class="hidden @3xl:inline">{SORT_LABEL[app.view.sort]}<span class="text-ink-3">&nbsp;· by {app.view.grouping}</span></span>
           </Button>
         {/snippet}
       </DropdownMenu.Trigger>
@@ -100,6 +104,7 @@
         </DropdownMenu.RadioGroup>
       </DropdownMenu.Content>
     </DropdownMenu.Root>
-    <Button size="sm" class="h-7 text-xs" onclick={() => app.run("newIssue")}><Plus class="size-3.5" /> New <span class="opacity-60">C</span></Button>
+    </div>
+    <Button size="sm" class="h-8 gap-1.5 pr-2 text-[13px]" onclick={() => app.run("newIssue")}><Plus class="size-3.5" /><span class="hidden @sm:inline">New issue</span> <kbd class="hidden rounded-[4px] bg-sheet/15 px-1 text-[11px] leading-4 @3xl:inline">c</kbd></Button>
   </div>
 </header>

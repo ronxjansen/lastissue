@@ -5,13 +5,13 @@
   let { state, size = 14 }: { state: State; size?: number } = $props();
 
   const color: Record<State, string> = {
-    backlog: "var(--muted-foreground)",
-    todo: "var(--muted-foreground)",
-    "in-progress": "oklch(0.78 0.16 75)",
-    "in-review": "oklch(0.68 0.16 150)",
-    done: "oklch(0.58 0.2 275)",
-    cancelled: "var(--muted-foreground)",
-    duplicate: "var(--muted-foreground)",
+    backlog: "var(--ink-3)",
+    todo: "var(--ink-3)",
+    "in-progress": "var(--state-progress)",
+    "in-review": "var(--state-review)",
+    done: "var(--state-done)",
+    cancelled: "var(--ink-3)",
+    duplicate: "var(--ink-3)",
   };
   // Fraction of the pie filled for the in-flight states.
   const pie: Partial<Record<State, number>> = { "in-progress": 0.5, "in-review": 0.75 };
@@ -29,9 +29,9 @@
   {#if state === "done" || state === "cancelled" || state === "duplicate"}
     <circle cx="7" cy="7" r="6" fill={color[state]} />
     {#if state === "done"}
-      <path d="M4.5 7.2 6.3 9 9.6 5.4" stroke="var(--background)" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round" />
+      <path d="M4.5 7.2 6.3 9 9.6 5.4" stroke="var(--sheet)" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round" />
     {:else}
-      <path d="M5 5l4 4M9 5 5 9" stroke="var(--background)" stroke-width="1.5" stroke-linecap="round" />
+      <path d="M5 5l4 4M9 5 5 9" stroke="var(--sheet)" stroke-width="1.5" stroke-linecap="round" />
     {/if}
   {:else}
     <circle

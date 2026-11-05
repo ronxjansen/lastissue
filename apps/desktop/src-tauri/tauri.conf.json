@@ -6,7 +6,7 @@
   "identifier": "dev.lastissue.gui",
   "build": {
     "beforeDevCommand": "pnpm dev",
-    "devUrl": "http://localhost:1420",
+    "devUrl": "http://127.0.0.1:5297",
     "beforeBuildCommand": "pnpm build",
     "frontendDist": "../dist"
   },

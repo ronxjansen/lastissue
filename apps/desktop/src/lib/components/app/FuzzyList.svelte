@@ -64,7 +64,7 @@
   }
 </script>
 
-<div class="{width} max-w-[calc(100vw-2rem)] overflow-hidden rounded-xl border bg-popover text-popover-foreground shadow-2xl">
+<div class="{width} max-w-[calc(100vw-2rem)] overflow-hidden rounded-xl border border-rule bg-popover text-popover-foreground shadow-pop">
   <input
     bind:this={input}
     bind:value={query}
@@ -72,7 +72,7 @@
     {placeholder}
     spellcheck="false"
     autocomplete="off"
-    class="h-11 w-full border-b bg-transparent px-4 text-sm outline-none placeholder:text-muted-foreground"
+    class="h-12 w-full border-b border-rule bg-transparent px-4 text-[15px] outline-none placeholder:text-ink-3"
   />
   {#if header}{@render header()}{/if}
   <div bind:this={list} class="max-h-[min(420px,60vh)] overflow-y-auto p-1">
@@ -83,17 +83,17 @@
         tabindex="-1"
         aria-selected={i === highlight}
         data-row={i}
-        class="cursor-default rounded-md px-3 py-1.5 text-sm {i === highlight ? 'bg-accent text-accent-foreground' : ''}"
+        class="cursor-default rounded-md px-3 py-2 text-[14px] {i === highlight ? 'bg-wash-strong text-ink' : 'text-ink-2'}"
         onmousemove={() => (highlight = i)}
         onclick={(e) => onpick(item, i, e)}
       >
         {@render row(item, i === highlight)}
       </div>
     {:else}
-      <div class="px-3 py-2 text-sm text-muted-foreground">{empty}</div>
+      <div class="px-3 py-3 text-[14px] text-ink-3">{empty}</div>
     {/each}
   </div>
   {#if footer}
-    <div class="border-t px-3 py-1.5 text-xs text-muted-foreground">{@render footer()}</div>
+    <div class="border-t border-rule bg-paper px-4 py-2 text-[12px] text-ink-3">{@render footer()}</div>
   {/if}
 </div>

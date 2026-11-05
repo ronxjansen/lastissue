@@ -9,12 +9,12 @@
 <svg width={size} height={size} viewBox="0 0 14 14" class="shrink-0" role="img" aria-label={PRIORITY_LABEL[priority ?? "none"]}>
   <title>{PRIORITY_LABEL[priority ?? "none"]}</title>
   {#if priority === "urgent"}
-    <rect x="1" y="1" width="12" height="12" rx="3" fill="oklch(0.65 0.2 40)" />
-    <path d="M7 3.8v4" stroke="white" stroke-width="1.6" stroke-linecap="round" />
-    <circle cx="7" cy="10.2" r="0.95" fill="white" />
+    <rect x="1" y="1" width="12" height="12" rx="3" fill="var(--urgent)" />
+    <path d="M7 3.8v4" stroke="var(--sheet)" stroke-width="1.6" stroke-linecap="round" />
+    <circle cx="7" cy="10.2" r="0.95" fill="var(--sheet)" />
   {:else if priority === null}
     {#each [2, 6, 10] as x (x)}
-      <rect {x} y="6.3" width="2" height="1.4" rx="0.5" fill="var(--muted-foreground)" opacity="0.7" />
+      <rect {x} y="6.3" width="2" height="1.4" rx="0.5" fill="var(--ink-3)" opacity="0.6" />
     {/each}
   {:else}
     {#each [1, 2, 3] as bar (bar)}
@@ -24,8 +24,8 @@
         width="3"
         height={bar * 3}
         rx="0.8"
-        fill="var(--foreground)"
-        opacity={bar <= level ? 0.85 : 0.2}
+        fill="var(--ink-2)"
+        opacity={bar <= level ? 0.9 : 0.22}
       />
     {/each}
   {/if}

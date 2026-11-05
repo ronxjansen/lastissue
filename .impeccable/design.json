@@ -1,0 +1,554 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-11-05T12:07:15.867903+00:00",
+  "title": "Design System: lastissue",
+  "extensions": {
+    "colorMeta": {
+      "ink": {
+        "role": "neutral",
+        "displayName": "Ink",
+        "canonical": "oklch(0.235 0.006 95)",
+        "dark": "oklch(0.93 0.004 95)",
+        "tonalRamp": [
+          "oklch(0.15 0.006 95)",
+          "oklch(0.27 0.006 95)",
+          "oklch(0.39 0.006 95)",
+          "oklch(0.51 0.006 95)",
+          "oklch(0.63 0.006 95)",
+          "oklch(0.75 0.006 95)",
+          "oklch(0.86 0.006 95)",
+          "oklch(0.95 0.006 95)"
+        ]
+      },
+      "ink-2": {
+        "role": "neutral",
+        "displayName": "Ink 2",
+        "canonical": "oklch(0.4 0.006 95)",
+        "dark": "oklch(0.82 0.004 95)",
+        "tonalRamp": [
+          "oklch(0.15 0.006 95)",
+          "oklch(0.27 0.006 95)",
+          "oklch(0.39 0.006 95)",
+          "oklch(0.51 0.006 95)",
+          "oklch(0.63 0.006 95)",
+          "oklch(0.75 0.006 95)",
+          "oklch(0.86 0.006 95)",
+          "oklch(0.95 0.006 95)"
+        ]
+      },
+      "ink-3": {
+        "role": "neutral",
+        "displayName": "Ink 3",
+        "canonical": "oklch(0.52 0.007 95)",
+        "dark": "oklch(0.67 0.005 95)",
+        "tonalRamp": [
+          "oklch(0.15 0.007 95)",
+          "oklch(0.27 0.007 95)",
+          "oklch(0.39 0.007 95)",
+          "oklch(0.51 0.007 95)",
+          "oklch(0.63 0.007 95)",
+          "oklch(0.75 0.007 95)",
+          "oklch(0.86 0.007 95)",
+          "oklch(0.95 0.007 95)"
+        ]
+      },
+      "rail": {
+        "role": "neutral",
+        "displayName": "Rail",
+        "canonical": "oklch(0.962 0.003 95)",
+        "dark": "oklch(0.172 0.004 95)",
+        "tonalRamp": [
+          "oklch(0.15 0.003 95)",
+          "oklch(0.27 0.003 95)",
+          "oklch(0.39 0.003 95)",
+          "oklch(0.51 0.003 95)",
+          "oklch(0.63 0.003 95)",
+          "oklch(0.75 0.003 95)",
+          "oklch(0.86 0.003 95)",
+          "oklch(0.95 0.003 95)"
+        ]
+      },
+      "paper": {
+        "role": "neutral",
+        "displayName": "Paper",
+        "canonical": "oklch(0.982 0.002 95)",
+        "dark": "oklch(0.19 0.004 95)",
+        "tonalRamp": [
+          "oklch(0.15 0.002 95)",
+          "oklch(0.27 0.002 95)",
+          "oklch(0.39 0.002 95)",
+          "oklch(0.51 0.002 95)",
+          "oklch(0.63 0.002 95)",
+          "oklch(0.75 0.002 95)",
+          "oklch(0.86 0.002 95)",
+          "oklch(0.95 0.002 95)"
+        ]
+      },
+      "sheet": {
+        "role": "neutral",
+        "displayName": "Sheet",
+        "canonical": "oklch(0.997 0.001 95)",
+        "dark": "oklch(0.212 0.004 95)",
+        "tonalRamp": [
+          "oklch(0.15 0.001 95)",
+          "oklch(0.27 0.001 95)",
+          "oklch(0.39 0.001 95)",
+          "oklch(0.51 0.001 95)",
+          "oklch(0.63 0.001 95)",
+          "oklch(0.75 0.001 95)",
+          "oklch(0.86 0.001 95)",
+          "oklch(0.95 0.001 95)"
+        ]
+      },
+      "rule": {
+        "role": "neutral",
+        "displayName": "Rule",
+        "canonical": "oklch(0.905 0.004 95)",
+        "dark": "oklch(1 0 0 / 0.1)",
+        "tonalRamp": [
+          "oklch(0.15 0.004 95)",
+          "oklch(0.27 0.004 95)",
+          "oklch(0.39 0.004 95)",
+          "oklch(0.51 0.004 95)",
+          "oklch(0.63 0.004 95)",
+          "oklch(0.75 0.004 95)",
+          "oklch(0.86 0.004 95)",
+          "oklch(0.95 0.004 95)"
+        ]
+      },
+      "rule-soft": {
+        "role": "neutral",
+        "displayName": "Rule Soft",
+        "canonical": "oklch(0.935 0.003 95)",
+        "dark": "oklch(1 0 0 / 0.065)",
+        "tonalRamp": [
+          "oklch(0.15 0.003 95)",
+          "oklch(0.27 0.003 95)",
+          "oklch(0.39 0.003 95)",
+          "oklch(0.51 0.003 95)",
+          "oklch(0.63 0.003 95)",
+          "oklch(0.75 0.003 95)",
+          "oklch(0.86 0.003 95)",
+          "oklch(0.95 0.003 95)"
+        ]
+      },
+      "wash": {
+        "role": "neutral",
+        "displayName": "Wash",
+        "canonical": "oklch(0.948 0.003 95)",
+        "dark": "oklch(1 0 0 / 0.05)",
+        "tonalRamp": [
+          "oklch(0.15 0.003 95)",
+          "oklch(0.27 0.003 95)",
+          "oklch(0.39 0.003 95)",
+          "oklch(0.51 0.003 95)",
+          "oklch(0.63 0.003 95)",
+          "oklch(0.75 0.003 95)",
+          "oklch(0.86 0.003 95)",
+          "oklch(0.95 0.003 95)"
+        ]
+      },
+      "wash-strong": {
+        "role": "neutral",
+        "displayName": "Wash Strong",
+        "canonical": "oklch(0.925 0.004 95)",
+        "dark": "oklch(1 0 0 / 0.085)",
+        "tonalRamp": [
+          "oklch(0.15 0.004 95)",
+          "oklch(0.27 0.004 95)",
+          "oklch(0.39 0.004 95)",
+          "oklch(0.51 0.004 95)",
+          "oklch(0.63 0.004 95)",
+          "oklch(0.75 0.004 95)",
+          "oklch(0.86 0.004 95)",
+          "oklch(0.95 0.004 95)"
+        ]
+      },
+      "link": {
+        "role": "primary",
+        "displayName": "Link Blue",
+        "canonical": "oklch(0.52 0.19 266)",
+        "dark": "oklch(0.75 0.13 266)",
+        "tonalRamp": [
+          "oklch(0.15 0.17 266)",
+          "oklch(0.27 0.17 266)",
+          "oklch(0.39 0.17 266)",
+          "oklch(0.51 0.17 266)",
+          "oklch(0.63 0.17 266)",
+          "oklch(0.75 0.17 266)",
+          "oklch(0.86 0.17 266)",
+          "oklch(0.95 0.17 266)"
+        ]
+      },
+      "mark": {
+        "role": "secondary",
+        "displayName": "Highlighter Lime",
+        "canonical": "oklch(0.925 0.165 118)",
+        "dark": "oklch(0.87 0.16 118)",
+        "tonalRamp": [
+          "oklch(0.15 0.16 118)",
+          "oklch(0.27 0.16 118)",
+          "oklch(0.39 0.16 118)",
+          "oklch(0.51 0.16 118)",
+          "oklch(0.63 0.16 118)",
+          "oklch(0.75 0.16 118)",
+          "oklch(0.86 0.16 118)",
+          "oklch(0.95 0.16 118)"
+        ]
+      },
+      "mark-soft": {
+        "role": "secondary",
+        "displayName": "Highlighter Wash",
+        "canonical": "oklch(0.925 0.165 118 / 0.45)",
+        "dark": "oklch(0.87 0.16 118 / 0.32)",
+        "tonalRamp": [
+          "oklch(0.15 0.16 118)",
+          "oklch(0.27 0.16 118)",
+          "oklch(0.39 0.16 118)",
+          "oklch(0.51 0.16 118)",
+          "oklch(0.63 0.16 118)",
+          "oklch(0.75 0.16 118)",
+          "oklch(0.86 0.16 118)",
+          "oklch(0.95 0.16 118)"
+        ]
+      },
+      "mark-ink": {
+        "role": "secondary",
+        "displayName": "Highlighter Ink",
+        "canonical": "oklch(0.3 0.06 118)",
+        "dark": "oklch(0.25 0.05 118)",
+        "tonalRamp": [
+          "oklch(0.15 0.06 118)",
+          "oklch(0.27 0.06 118)",
+          "oklch(0.39 0.06 118)",
+          "oklch(0.51 0.06 118)",
+          "oklch(0.63 0.06 118)",
+          "oklch(0.75 0.06 118)",
+          "oklch(0.86 0.06 118)",
+          "oklch(0.95 0.06 118)"
+        ]
+      },
+      "state-progress": {
+        "role": "tertiary",
+        "displayName": "In Progress Amber",
+        "canonical": "oklch(0.72 0.15 70)",
+        "dark": "oklch(0.78 0.14 75)",
+        "tonalRamp": [
+          "oklch(0.15 0.14 70)",
+          "oklch(0.27 0.14 70)",
+          "oklch(0.39 0.14 70)",
+          "oklch(0.51 0.14 70)",
+          "oklch(0.63 0.14 70)",
+          "oklch(0.75 0.14 70)",
+          "oklch(0.86 0.14 70)",
+          "oklch(0.95 0.14 70)"
+        ]
+      },
+      "state-review": {
+        "role": "tertiary",
+        "displayName": "In Review Violet",
+        "canonical": "oklch(0.55 0.15 300)",
+        "dark": "oklch(0.74 0.12 300)",
+        "tonalRamp": [
+          "oklch(0.15 0.14 300)",
+          "oklch(0.27 0.14 300)",
+          "oklch(0.39 0.14 300)",
+          "oklch(0.51 0.14 300)",
+          "oklch(0.63 0.14 300)",
+          "oklch(0.75 0.14 300)",
+          "oklch(0.86 0.14 300)",
+          "oklch(0.95 0.14 300)"
+        ]
+      },
+      "urgent": {
+        "role": "tertiary",
+        "displayName": "Urgent Orange",
+        "canonical": "oklch(0.64 0.19 42)",
+        "dark": "oklch(0.7 0.17 45)",
+        "tonalRamp": [
+          "oklch(0.15 0.17 42)",
+          "oklch(0.27 0.17 42)",
+          "oklch(0.39 0.17 42)",
+          "oklch(0.51 0.17 42)",
+          "oklch(0.63 0.17 42)",
+          "oklch(0.75 0.17 42)",
+          "oklch(0.86 0.17 42)",
+          "oklch(0.95 0.17 42)"
+        ]
+      },
+      "danger": {
+        "role": "tertiary",
+        "displayName": "Danger Red",
+        "canonical": "oklch(0.55 0.2 27)",
+        "dark": "oklch(0.7 0.17 25)",
+        "tonalRamp": [
+          "oklch(0.15 0.18 27)",
+          "oklch(0.27 0.18 27)",
+          "oklch(0.39 0.18 27)",
+          "oklch(0.51 0.18 27)",
+          "oklch(0.63 0.18 27)",
+          "oklch(0.75 0.18 27)",
+          "oklch(0.86 0.18 27)",
+          "oklch(0.95 0.18 27)"
+        ]
+      },
+      "ok": {
+        "role": "tertiary",
+        "displayName": "OK Green",
+        "canonical": "oklch(0.6 0.14 155)",
+        "dark": "oklch(0.72 0.13 155)",
+        "tonalRamp": [
+          "oklch(0.15 0.13 155)",
+          "oklch(0.27 0.13 155)",
+          "oklch(0.39 0.13 155)",
+          "oklch(0.51 0.13 155)",
+          "oklch(0.63 0.13 155)",
+          "oklch(0.75 0.13 155)",
+          "oklch(0.86 0.13 155)",
+          "oklch(0.95 0.13 155)"
+        ]
+      },
+      "warn": {
+        "role": "tertiary",
+        "displayName": "Warn Ochre",
+        "canonical": "oklch(0.6 0.13 75)",
+        "dark": "oklch(0.78 0.13 80)",
+        "tonalRamp": [
+          "oklch(0.15 0.13 75)",
+          "oklch(0.27 0.13 75)",
+          "oklch(0.39 0.13 75)",
+          "oklch(0.51 0.13 75)",
+          "oklch(0.63 0.13 75)",
+          "oklch(0.75 0.13 75)",
+          "oklch(0.86 0.13 75)",
+          "oklch(0.95 0.13 75)"
+        ]
+      }
+    },
+    "typographyMeta": {
+      "headline": {
+        "displayName": "Issue Title",
+        "purpose": "The issue title in the detail sheet; 22px sibling in the create dialog."
+      },
+      "title": {
+        "displayName": "Section",
+        "purpose": "§ section headings in the detail pane."
+      },
+      "body-reading": {
+        "displayName": "Reading",
+        "purpose": "Issue bodies (15.5px) and comments (15px) at a 70ch measure."
+      },
+      "body": {
+        "displayName": "UI Body",
+        "purpose": "Row titles, nav items, palette options; the 14px root."
+      },
+      "label": {
+        "displayName": "Meta",
+        "purpose": "Row meta, activity events, comment headers, group heads."
+      },
+      "mono": {
+        "displayName": "File Facts",
+        "purpose": "IDs, filenames, mail header block, counts, query text, key hints."
+      }
+    },
+    "shadows": [
+      {
+        "name": "pop",
+        "value": "0 1px 2px oklch(0.2 0.01 95 / 0.06), 0 8px 24px -6px oklch(0.2 0.01 95 / 0.14)",
+        "dark": "0 1px 2px oklch(0 0 0 / 0.3), 0 12px 32px -8px oklch(0 0 0 / 0.55)",
+        "purpose": "Popovers, menus, dialogs, command palette; paired with a 1px rule ring."
+      }
+    ],
+    "motion": [
+      {
+        "name": "mark-swipe",
+        "value": "640ms cubic-bezier(0.16, 1, 0.3, 1)",
+        "purpose": "Highlighter draws in left to right once on fresh titles; off under reduced motion."
+      },
+      {
+        "name": "hover",
+        "value": "100ms",
+        "purpose": "Wash and colour transitions on rows, nav, hover targets."
+      },
+      {
+        "name": "link-underline",
+        "value": "120ms",
+        "purpose": "Prose link underline solidifies on hover."
+      },
+      {
+        "name": "float-in",
+        "value": "100ms fade + zoom-95",
+        "purpose": "Popover, menu and dialog enter/exit."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "@xs",
+        "value": "20rem",
+        "scope": "main container"
+      },
+      {
+        "name": "@sm",
+        "value": "24rem",
+        "scope": "main container"
+      },
+      {
+        "name": "@md",
+        "value": "28rem",
+        "scope": "main container"
+      },
+      {
+        "name": "@lg",
+        "value": "32rem",
+        "scope": "main / detail article container"
+      },
+      {
+        "name": "@2xl",
+        "value": "42rem",
+        "scope": "main container"
+      },
+      {
+        "name": "@3xl",
+        "value": "48rem",
+        "scope": "main container"
+      },
+      {
+        "name": "@4xl",
+        "value": "56rem",
+        "scope": "main container"
+      },
+      {
+        "name": "sidebar-narrow",
+        "value": "max-width: 1000px",
+        "scope": "viewport"
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "Ink command button for real actions (New issue, Comment, Save).",
+      "html": "<button class=\"ds-btn-primary\"><svg width=\"14\" height=\"14\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\"><path d=\"M5 12h14M12 5v14\"/></svg>New issue <kbd class=\"ds-kbd\">c</kbd></button>",
+      "css": ".ds-btn-primary{display:inline-flex;align-items:center;gap:6px;height:32px;padding:0 8px 0 10px;border:1px solid transparent;border-radius:calc(var(--radius,0.45rem)*0.8);background:var(--ink);color:var(--sheet);font:500 13px 'Atkinson Hyperlegible Next Variable',system-ui,sans-serif;cursor:default;transition:background .12s}.ds-btn-primary:hover{background:color-mix(in oklch,var(--ink) 80%,transparent)}.ds-btn-primary:focus-visible{outline:2px solid color-mix(in oklch,var(--link) 70%,transparent);outline-offset:1px}.ds-kbd{font-family:'Atkinson Hyperlegible Mono Variable',ui-monospace,monospace;font-size:11px;line-height:16px;padding:0 4px;border-radius:4px;background:color-mix(in oklch,var(--sheet) 15%,transparent)}"
+    },
+    {
+      "name": "Ghost Button",
+      "kind": "button",
+      "refersTo": "button-ghost",
+      "description": "Quiet secondary action; wash on hover.",
+      "html": "<button class=\"ds-btn-ghost\">Reload theirs</button>",
+      "css": ".ds-btn-ghost{height:32px;padding:0 10px;border:1px solid transparent;border-radius:calc(var(--radius,0.45rem)*0.8);background:transparent;color:var(--ink-2);font:500 13px 'Atkinson Hyperlegible Next Variable',system-ui,sans-serif;transition:background .1s,color .1s}.ds-btn-ghost:hover{background:var(--wash);color:var(--ink)}.ds-btn-ghost:focus-visible{outline:2px solid color-mix(in oklch,var(--link) 70%,transparent);outline-offset:1px}"
+    },
+    {
+      "name": "Filter Input",
+      "kind": "input",
+      "refersTo": "input-filter",
+      "description": "Borderless wash field; types in mono, lifts to sheet on focus.",
+      "html": "<label class=\"ds-filter\"><svg width=\"14\" height=\"14\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\"><path d=\"M3 6h18M7 12h10M10 18h4\"/></svg><input placeholder=\"Filter\" value=\"state:todo\"></label>",
+      "css": ".ds-filter{position:relative;display:flex;align-items:center;width:280px}.ds-filter svg{position:absolute;left:10px;color:var(--ink-3);pointer-events:none}.ds-filter input{height:32px;width:100%;padding:0 32px;border:1px solid transparent;border-radius:calc(var(--radius,0.45rem)*0.8);background:var(--wash);color:var(--ink);font:12.5px 'Atkinson Hyperlegible Mono Variable',ui-monospace,monospace;outline:none;transition:background .1s,border-color .1s}.ds-filter input::placeholder{font:13px 'Atkinson Hyperlegible Next Variable',system-ui,sans-serif;color:var(--ink-3)}.ds-filter input:hover{background:var(--wash-strong)}.ds-filter input:focus{background:var(--sheet);border-color:var(--rule)}"
+    },
+    {
+      "name": "Sidebar Navigation",
+      "kind": "nav",
+      "refersTo": "nav-item",
+      "description": "Rail nav with lime repo badge, ink-2 items, mono counts, wash-strong active.",
+      "html": "<nav class=\"ds-nav\"><div class=\"ds-repo\"><span class=\"ds-badge\">L</span>lastissue</div><a class=\"ds-nav-item\">My issues<span class=\"ds-count\">2</span></a><a class=\"ds-nav-item ds-on\">All issues<span class=\"ds-count\">11</span></a><div class=\"ds-nav-label\">Projects</div><a class=\"ds-nav-item\">Gui<span class=\"ds-count\">8</span></a></nav>",
+      "css": ".ds-nav{width:224px;padding:8px;background:var(--rail);font:14px 'Atkinson Hyperlegible Next Variable',system-ui,sans-serif}.ds-repo{display:flex;align-items:center;gap:10px;height:36px;padding:0 10px;font-weight:700;color:var(--ink)}.ds-badge{display:grid;place-items:center;width:24px;height:24px;border-radius:5px;transform:rotate(-3deg);background:var(--mark);color:var(--mark-ink);font:700 12px 'Atkinson Hyperlegible Mono Variable',ui-monospace,monospace}.ds-nav-item{display:flex;align-items:center;height:32px;padding:0 10px;border-radius:calc(var(--radius,0.45rem)*0.8);color:var(--ink-2);transition:background .1s,color .1s}.ds-nav-item:hover{background:var(--wash);color:var(--ink)}.ds-nav-item.ds-on{background:var(--wash-strong);color:var(--ink);font-weight:700}.ds-count{margin-left:auto;font:12px 'Atkinson Hyperlegible Mono Variable',ui-monospace,monospace;color:var(--ink-3)}.ds-nav-label{margin:24px 0 4px;padding-left:10px;font-size:12.5px;font-weight:700;color:var(--ink-3)}"
+    },
+    {
+      "name": "Issue Row",
+      "kind": "custom",
+      "refersTo": "issue-row",
+      "description": "40px list row: state ring, title, ink-3 meta, mono ID; fresh titles carry the highlighter swipe.",
+      "html": "<div class=\"ds-rows\"><div class=\"ds-row ds-open\"><span class=\"ds-cur\"></span><svg width=\"14\" height=\"14\" viewBox=\"0 0 14 14\"><circle cx=\"7\" cy=\"7\" r=\"5.5\" fill=\"none\" stroke=\"var(--state-review)\" stroke-width=\"1.5\"/><path d=\"M7 7 L7 3.5 A3.5 3.5 0 1 1 3.5 7 Z\" fill=\"var(--state-review)\"/></svg><span class=\"ds-t\">Add Linear import</span><span class=\"ds-id\">4xba5m</span><span class=\"ds-age\">2h</span></div><div class=\"ds-row\"><svg width=\"14\" height=\"14\" viewBox=\"0 0 14 14\"><circle cx=\"7\" cy=\"7\" r=\"5.5\" fill=\"none\" stroke=\"var(--ink-3)\" stroke-width=\"1.5\"/></svg><span class=\"ds-t\"><span class=\"ds-fresh\">M4: GUI editing, drag and drop</span></span><span class=\"ds-id\">vycr0q</span><span class=\"ds-age\">now</span></div></div>",
+      "css": ".ds-rows{width:520px;background:var(--paper);font:14px 'Atkinson Hyperlegible Next Variable',system-ui,sans-serif}.ds-row{position:relative;display:flex;align-items:center;gap:12px;height:40px;padding:0 20px 0 24px;border-bottom:1px solid var(--rule-soft);transition:background .1s}.ds-row:hover{background:var(--wash)}.ds-row.ds-open{background:var(--wash-strong)}.ds-cur{position:absolute;left:8px;top:50%;width:3px;height:16px;transform:translateY(-50%);border-radius:9999px;background:var(--link)}.ds-t{flex:1;min-width:0;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;color:var(--ink)}.ds-id{width:4.75rem;text-align:right;font:12px 'Atkinson Hyperlegible Mono Variable',ui-monospace,monospace;color:var(--ink-3)}.ds-age{width:36px;text-align:right;font-size:12px;color:var(--ink-3);font-variant-numeric:tabular-nums}.ds-fresh{background-image:linear-gradient(transparent 52%,var(--mark-soft) 52%,var(--mark-soft) 92%,transparent 92%);background-repeat:no-repeat;animation:ds-swipe 640ms cubic-bezier(0.16,1,0.3,1) both}@keyframes ds-swipe{from{background-size:0% 100%}}"
+    },
+    {
+      "name": "Mail Header Block",
+      "kind": "custom",
+      "refersTo": "mono",
+      "description": "The file's own headers as a mono definition grid at the top of the sheet.",
+      "html": "<dl class=\"ds-hdr\"><dt>Issue:</dt><dd class=\"ds-b\">4xba5m</dd><dt>State:</dt><dd><button>In review</button></dd><dt>From:</dt><dd>Ron Jansen</dd><dt>Priority:</dt><dd><button>High</button></dd><dt>Date:</dt><dd>2026-11-02 12:57</dd><dt>Due:</dt><dd><button class=\"ds-unset\">none</button></dd></dl>",
+      "css": ".ds-hdr{display:grid;grid-template-columns:4.75rem minmax(0,1fr) 5.25rem minmax(0,1fr);align-items:center;row-gap:1px;width:560px;padding:24px 40px;background:var(--sheet);font:12px/24px 'Atkinson Hyperlegible Mono Variable',ui-monospace,monospace;color:var(--ink-3);margin:0}.ds-hdr dd{margin:0;color:var(--ink-2)}.ds-hdr .ds-b{font-weight:700;color:var(--ink)}.ds-hdr button{height:24px;margin:0 -6px;padding:0 6px;border:0;border-radius:calc(var(--radius,0.45rem)*0.6);background:transparent;color:var(--ink-2);font:inherit;transition:background .1s,color .1s}.ds-hdr button:hover{background:var(--wash);color:var(--ink)}.ds-hdr button:focus-visible{outline:2px solid color-mix(in oklch,var(--link) 70%,transparent);outline-offset:1px}.ds-hdr .ds-unset{color:var(--ink-3)}"
+    },
+    {
+      "name": "Section Heading and Activity Spine",
+      "kind": "custom",
+      "refersTo": "title",
+      "description": "§ heading over a soft rule, then one spine with shape-coded marks.",
+      "html": "<div class=\"ds-act\"><h2><span>§</span>Activity</h2><ol><li class=\"ds-ev\"><i></i><b>Ron</b> state todo → in-review<em>2h</em></li><li class=\"ds-cm\"><i></i><header><b>Ron Jansen</b><em>1h</em><code>#1</code></header><p>Looks good. One question on the <a href=\"#\">auth flow</a>.</p></li></ol></div>",
+      "css": ".ds-act{width:520px;padding:0 40px 24px;background:var(--sheet);font:14px 'Atkinson Hyperlegible Next Variable',system-ui,sans-serif;color:var(--ink)}.ds-act h2{display:flex;gap:8px;align-items:baseline;margin:0 0 16px;padding-top:24px;border-top:1px solid var(--rule-soft);font-size:16px;font-weight:700}.ds-act h2 span{font:400 16px 'Atkinson Hyperlegible Mono Variable',ui-monospace,monospace;color:var(--ink-3)}.ds-act ol{position:relative;list-style:none;margin:0;padding:0}.ds-act ol::before{content:'';position:absolute;top:12px;bottom:12px;left:5px;width:1px;background:var(--rule)}.ds-act li{position:relative;padding-left:28px}.ds-act i{position:absolute;border-radius:9999px}.ds-ev{display:flex;gap:6px;padding:4px 0;font-size:13px;color:var(--ink-3)}.ds-ev b{font-weight:400;color:var(--ink-2)}.ds-ev em{margin-left:auto;font-style:normal;font-size:12px}.ds-ev i{top:.8em;left:3px;width:5px;height:5px;background:var(--ink-3)}.ds-cm{padding:16px 0}.ds-cm i{top:1.3rem;left:0;width:11px;height:11px;box-sizing:border-box;border:2px solid var(--sheet);background:var(--ink-2)}.ds-cm header{display:flex;gap:8px;align-items:baseline;font-size:13px}.ds-cm em{font-style:normal;color:var(--ink-3)}.ds-cm code{margin-left:auto;font:12px 'Atkinson Hyperlegible Mono Variable',ui-monospace,monospace;color:var(--ink-3)}.ds-cm p{margin:6px 0 0;font-size:15px;line-height:1.65}.ds-cm a{color:var(--link);text-decoration:underline 1px color-mix(in oklch,var(--link) 40%,transparent);text-underline-offset:3px;transition:text-decoration-color .12s}.ds-cm a:hover{text-decoration-color:var(--link)}"
+    },
+    {
+      "name": "Popover / Palette",
+      "kind": "card",
+      "refersTo": "popover",
+      "description": "Floating sheet with rule ring and Pop shadow; the only shadowed surface.",
+      "html": "<div class=\"ds-pal\"><input placeholder=\"Type a command…\"><div class=\"ds-opt ds-hi\">New issue</div><div class=\"ds-opt\">Open settings</div><div class=\"ds-foot\">↵ run · esc close</div></div>",
+      "css": ".ds-pal{width:420px;overflow:hidden;border:1px solid var(--rule);border-radius:calc(var(--radius,0.45rem)*1.4);background:var(--sheet);color:var(--ink);box-shadow:var(--elev-pop,0 1px 2px oklch(0.2 0.01 95 / 0.06),0 8px 24px -6px oklch(0.2 0.01 95 / 0.14));font:14px 'Atkinson Hyperlegible Next Variable',system-ui,sans-serif}.ds-pal input{box-sizing:border-box;width:100%;height:48px;padding:0 16px;border:0;border-bottom:1px solid var(--rule);background:transparent;color:var(--ink);font:15px inherit;font-family:inherit;outline:none}.ds-pal input::placeholder{color:var(--ink-3)}.ds-opt{margin:4px;padding:8px 12px;border-radius:calc(var(--radius,0.45rem)*0.8);color:var(--ink-2)}.ds-opt:hover,.ds-opt.ds-hi{background:var(--wash-strong);color:var(--ink)}.ds-foot{padding:8px 16px;border-top:1px solid var(--rule);background:var(--paper);font-size:12px;color:var(--ink-3)}"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Plaintext Standard",
+    "overview": "Every issue is a mail file in the repo, and the interface reads like one: a numbered document with plain headers, prose set for reading, and a thread on a single spine. The app is neutral paper and ink (no cream, hue 95 at near-zero chroma), monochrome chrome drawn with hairline rules, one link-blue accent, and one highlighter mark that is the only playful ink.\n\nDensity is calm rather than packed. List rows are airy (40px) with state, title, and quiet meta; everything else in a row is ink-3 text, never a chip or an avatar. The detail pane is a document, not a form: a mono header block that reproduces the file's own headers, a big bold title, a 70ch body, then sections marked with `§`. Properties are editable in place, but they read as a byline and only show a hover wash on intent.\n\nLight and dark get equal care and follow the OS (`.dark` class). Dark is not an inversion: rules and washes become white-alpha films, and the highlighter turns the ink itself lime instead of laying a band behind light text.",
+    "keyCharacteristics": [
+      "Three paper grounds that step up in lightness toward the reading sheet: rail < paper < sheet.",
+      "Colour belongs only to state, the link accent, the highlighter, and status (danger/ok/warn). Chrome is ink.",
+      "Atkinson Hyperlegible Next for UI and prose; Atkinson Hyperlegible Mono for real file facts (IDs, filenames, headers, counts, keys).",
+      "Hairline rules and tonal washes instead of boxes; shadows only on floating layers.",
+      "Mail-native reading devices: `>` quote columns, `§` section marks, `· · ·` breaks."
+    ],
+    "rules": [
+      {
+        "name": "The Monochrome Chrome Rule",
+        "body": "Toolbars, sidebar, buttons, and inputs are ink, paper, rule, and wash. A colour on chrome must mean a state, the link accent, or a status; never decoration.",
+        "section": "colors"
+      },
+      {
+        "name": "The One Highlighter Rule",
+        "body": "Lime marks only what is new to the reader (fresh rows), what the reader is holding (selection, drop target), and which repo they are in. Do not spend it on emphasis, badges, or calls to action.",
+        "section": "colors"
+      },
+      {
+        "name": "The Paper Step Rule",
+        "body": "Grounds rise toward reading: rail (0.962) < paper (0.982) < sheet (0.997). Whatever is read most sits on the lightest paper.",
+        "section": "colors"
+      },
+      {
+        "name": "The Real Mono Rule",
+        "body": "Mono is for things that exist verbatim in the file or the keyboard: IDs, filenames, header labels, counts, query tokens, key names. Prose and labels never go mono.",
+        "section": "typography"
+      },
+      {
+        "name": "The Two Weights Rule",
+        "body": "Regular and bold (700). Emphasis comes from weight and ink step, not size jumps or uppercase tracking.",
+        "section": "typography"
+      },
+      {
+        "name": "The Float-Only Shadow Rule",
+        "body": "If it lives in the document or the shell, it has no shadow. Only things that sit above the app get Pop.",
+        "section": "elevation"
+      }
+    ],
+    "dos": [
+      "Do put the thing being read on `sheet`, and step chrome down to `paper` and `rail`.",
+      "Do show state through the 14px state icon and its ink; leave the rest of the row ink and ink-3.",
+      "Do set IDs, filenames, counts, header labels, and key hints in Atkinson Hyperlegible Mono.",
+      "Do mark detail sections with a mono ink-3 `§` before a 16px bold heading, over a soft rule.",
+      "Do reveal secondary meta through container queries on the pane that holds it, not viewport breakpoints.",
+      "Do define every new colour in both `:root` and `.dark`; in dark, rules and washes are white-alpha films.",
+      "Do honour `prefers-reduced-motion`: the highlighter swipe is the only signature motion, and it switches off."
+    ],
+    "donts": [
+      "Don't add chips, pills, avatars, or coloured label badges to list rows or cards; labels are comma-separated ink-3 text.",
+      "Don't use the highlighter for emphasis, promotion, or as a button colour.",
+      "Don't colour chrome (toolbars, nav, primary buttons) with an accent; the primary button is ink.",
+      "Don't box the issue's properties into a form card; they stay a plain header block.",
+      "Don't add shadows to anything that does not float above the app.",
+      "Don't use cream or tinted paper; grounds stay at chroma 0.001-0.003.",
+      "Don't render a band highlight behind light text in dark mode; recolour the text instead."
+    ]
+  }
+}

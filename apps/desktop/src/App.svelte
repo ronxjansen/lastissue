@@ -51,7 +51,7 @@
 <div class="flex h-screen flex-col overflow-hidden bg-background text-foreground select-none">
   <div class="flex min-h-0 flex-1">
     <Sidebar />
-    <main class="flex min-w-0 flex-1 flex-col">
+    <main class="@container flex min-w-0 flex-1 flex-col overflow-hidden">
       <Toolbar />
       <div class="min-h-0 flex-1" role="grid" tabindex="-1" onfocusin={() => (app.focus = "issues")}>
         {#if !ready}

@@ -5,7 +5,7 @@
 
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
 import { open as openDialog } from "@tauri-apps/plugin-dialog";
-import { SvelteMap } from "svelte/reactivity";
+import { SvelteMap, SvelteSet } from "svelte/reactivity";
 import { toast } from "svelte-sonner";
 import {
   api,
@@ -79,6 +79,15 @@ function serial<T>(f: () => Promise<T>): Promise<T> {
   return p;
 }
 
+/** When this window last wrote to disk; index deltas soon after are our own echo. */
+let lastWrite = 0;
+const ECHO_MS = 3000;
+
+function write<T>(f: () => Promise<T>): Promise<T> {
+  lastWrite = Date.now();
+  return serial(f);
+}
+
 function report(e: unknown) {
   toast.error(String(e));
 }
@@ -87,6 +96,8 @@ class App {
   meta = $state<Meta>(emptyMeta);
   /** key → summary. */
   issues = new SvelteMap<string, Summary>();
+  /** Keys that changed on disk (another writer, a git pull) and haven't been opened since. */
+  fresh = new SvelteSet<string>();
   /** short ID → key (not reactive; read alongside `issues`). */
   private byId = new Map<string, string>();
   projects = $state<Project[]>([]);
@@ -162,13 +173,18 @@ class App {
     if (full) {
       this.issues.clear();
       this.byId.clear();
+      this.fresh.clear();
     }
     for (const k of removed) {
+      this.fresh.delete(k);
       const s = this.issues.get(k);
       if (s && this.byId.get(s.id) === k) this.byId.delete(s.id);
       this.issues.delete(k);
     }
+    const echo = Date.now() - lastWrite < ECHO_MS;
     for (const s of changed) {
+      const prev = this.issues.get(s.key);
+      if (!full && !echo && s.id !== this.doc?.id && (!prev || prev.updated !== s.updated)) this.fresh.add(s.key);
       this.issues.set(s.key, s);
       if (!this.byId.has(s.id) || full) this.byId.set(s.id, s.key);
     }
@@ -227,7 +243,11 @@ class App {
   // ------------------------------------------------------- open issue
 
   open(id: string | null) {
-    if (id) this.cursor = id;
+    if (id) {
+      this.cursor = id;
+      const k = this.byId.get(id);
+      if (k) this.fresh.delete(k);
+    }
     serial(() => api.select(id)).catch(report);
   }
 
@@ -241,7 +261,7 @@ class App {
   editField(kind: "title" | "body", text: string) {
     const id = this.doc?.id;
     if (!id) return;
-    serial(() => api.docEdit(id, kind, text))
+    write(() => api.docEdit(id, kind, text))
       .then((due) => due && this.scheduleSave())
       .catch(report);
   }
@@ -250,7 +270,7 @@ class App {
     if (this.saveTimer) clearTimeout(this.saveTimer);
     this.saveTimer = setTimeout(() => {
       this.saveTimer = null;
-      serial(() => api.docSave()).catch(report);
+      write(() => api.docSave()).catch(report);
     }, SAVE_DEBOUNCE_MS);
   }
 
@@ -258,7 +278,7 @@ class App {
     if (!this.saveTimer) return;
     clearTimeout(this.saveTimer);
     this.saveTimer = null;
-    serial(() => api.docSave()).catch(report);
+    write(() => api.docSave()).catch(report);
   }
 
   docAction(a: "keepMine" | "useTheirs" | "restoreLeftover" | "discardLeftover") {
@@ -269,16 +289,16 @@ class App {
 
   edit(ids: string[], edit: Edit) {
     if (!ids.length) return Promise.resolve();
-    return serial(() => api.applyEdit(ids, edit)).catch(report);
+    return write(() => api.applyEdit(ids, edit)).catch(report);
   }
 
   dropCard(id: string, target: GroupKey) {
     const ids = this.selection.includes(id) ? [...this.selection] : [id];
-    serial(() => api.dropCard(ids, target)).catch(report);
+    write(() => api.dropCard(ids, target)).catch(report);
   }
 
   createIssue(issue: Parameters<typeof api.createIssue>[0]) {
-    return serial(() => api.createIssue(issue)).then((id) => {
+    return write(() => api.createIssue(issue)).then((id) => {
       this.cursor = id;
       this.focus = "detail";
       return id;
@@ -288,13 +308,13 @@ class App {
   addComment(body: string) {
     const id = this.doc?.id;
     if (!id) return Promise.reject(new Error("no open issue"));
-    return serial(() => api.addComment(id, body));
+    return write(() => api.addComment(id, body));
   }
 
   editComment(messageId: string, body: string) {
     const id = this.doc?.id;
     if (!id) return Promise.reject(new Error("no open issue"));
-    return serial(() => api.editComment(id, messageId, body));
+    return write(() => api.editComment(id, messageId, body));
   }
 
   deleteComment(messageId: string) {
@@ -305,7 +325,7 @@ class App {
       title: "Delete comment?",
       detail: "The comment is removed from the file; an event records it.",
       confirm: "Delete",
-      run: () => serial(() => api.deleteComment(id, messageId)).catch(report),
+      run: () => write(() => api.deleteComment(id, messageId)).catch(report),
     };
   }
 
@@ -393,7 +413,7 @@ class App {
       case "moveCardNext": {
         const ids = this.targets();
         if (ids.length)
-          serial(() => api.moveCards(ids, a === "moveCardNext" ? 1 : -1)).catch(report);
+          write(() => api.moveCards(ids, a === "moveCardNext" ? 1 : -1)).catch(report);
         return;
       }
       case "setState":
@@ -438,7 +458,7 @@ class App {
           confirm: "Delete",
           run: () => {
             this.selection = [];
-            serial(() => api.deleteIssues(ids)).catch(report);
+            write(() => api.deleteIssues(ids)).catch(report);
           },
         };
         return;

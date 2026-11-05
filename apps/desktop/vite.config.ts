@@ -10,6 +10,6 @@ export default defineConfig({
     alias: { $lib: path.resolve("./src/lib") },
   },
   clearScreen: false,
-  server: { port: 1420, strictPort: true, watch: { ignored: ["**/src-tauri/**"] } },
+  server: { host: "127.0.0.1", port: 5297, strictPort: true, watch: { ignored: ["**/src-tauri/**"] } },
   build: { target: "safari16", outDir: "dist", chunkSizeWarningLimit: 2000 },
 });
