@@ -1,0 +1,32 @@
+[package]
+name = "desktop"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+publish = false
+
+[[bin]]
+name = "lastissue-gui"
+path = "src/main.rs"
+
+[build-dependencies]
+tauri-build.workspace = true
+
+[dependencies]
+lastissue.workspace = true
+chrono.workspace = true
+directories.workspace = true
+notify.workspace = true
+rayon.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+tauri.workspace = true
+tauri-plugin-clipboard-manager.workspace = true
+tauri-plugin-deep-link.workspace = true
+tauri-plugin-dialog.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
+
+[lints]
+workspace = true
