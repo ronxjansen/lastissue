@@ -257,7 +257,9 @@ Assignee shorthand: `me` resolves through the chain above. Addresses must contai
 
 - **Comment edit:** in place, and adds/updates `X-Edited: <date>`. It also sets
   `X-Edited-By` when the editor is not the `From:` author. No event is appended.
-- **Issue body edit:** the same rule, applied to message #1.
+- **Issue body edit:** the same rule, applied to message #1. It also appends
+  (or coalesces into, §5.3) an update event with the line `body: edited` (no
+  diff).
 - **Comment delete:** removes the message and appends an event.
 - **Issue delete:** removes the file.
 - There is no authorization; anyone can edit anything. `X-Edited-By` keeps it
@@ -265,7 +267,8 @@ Assignee shorthand: `me` resolves through the chain above. Addresses must contai
 
 ### 5.3 Events
 
-One event per mutating command, listing every changed field:
+Events stay in the file as an audit log. An update lists every changed field,
+one line each:
 
 ```
 From 9m2c4a@lastissue Sat Oct 31 22:40:00 2026
@@ -286,6 +289,25 @@ assignee: (none) → claude@agent
 
 `X-Issue-Event` values: `update`, `comment-deleted`, `move`. Events are
 informational only; state is **never** derived from them.
+
+**Coalescing.** Quick successive edits by one actor make one event, not many:
+
+- **Burst:** if the file's **last message** is an `X-Issue-Event: update` with
+  the same `From` **and** `Sender` (both absent counts as the same) as the
+  command, and its `Date` is less than **15 minutes** old, the new changes
+  merge into it. Otherwise a new event is appended. The window runs from the
+  burst's start, so a burst lasts at most 15 minutes.
+- **Merging:** a field already in the event keeps its original "from" value
+  and gets the new "to"; a new field is added as a line at the end. If "to"
+  equals "from", the line is dropped, and an event left with no lines is
+  removed. `body: edited` appears at most once.
+- The event's `Date` stays at the burst start (its `Subject` follows the
+  current title).
+- A comment, or another actor's change, ends the burst (the event is then no
+  longer last, or not theirs).
+- `move` and `comment-deleted` events never coalesce, and neither do the
+  events `import linear --existing update` writes (§6.7).
+- There is no per-repo configuration.
 
 ---
 
@@ -318,9 +340,10 @@ lastissue issue list   [--project P | --no-project] [--state S]... [--all]
                        [--label L]... [--assignee WHO] [--author WHO]
                        [--watching WHO] [--agent] [--parent ID]
                        [--ready] [--expired] [--search TEXT]... [--regex]
+                       [--filter "TOKENS"]...
                        [--sort state|created|updated|priority|due]
                        [--limit N] [--offset N] [--brief]
-lastissue issue show   <id>
+lastissue issue show   <id> [--no-events]
 lastissue issue update <id> [--title …] [--body … | --body-file … | -]
                        [--state S] [--priority P | --no-priority]
                        [--add-label L]... [--remove-label L]...
@@ -383,6 +406,8 @@ X-Repo-Status: ok
 Everything is mbox / RFC 5322 header blocks. There is no JSON.
 
 - **`issue show`** prints the full mbox content of the issue file.
+  `--no-events` leaves out event messages (`X-Issue-Event`), so only the issue
+  and its comments are printed; computed headers are unchanged.
 - **`issue list`** prints one header block per issue (message #1 headers plus
   computed fields, no body), separated by blank lines:
   ```
@@ -439,6 +464,29 @@ Everything is mbox / RFC 5322 header blocks. There is no JSON.
   suffix of a filename, so it needs no scan of other issues.
 - Filters: `--assignee` matches `To:`, `--author` matches `From:`, `--agent` matches
   any issue with a `Sender:`, and `--watching` matches `Cc:`.
+- **Filter tokens:** `--filter "TOKENS"` takes the grammar the GUI search box
+  and filter bar use (one parser in `core::query`). Words split on whitespace;
+  double quotes group words and are removed (`label:"needs review"`).
+
+  | Token | Meaning |
+  |---|---|
+  | `state:S` | State (input normalized as in §3.2). Repeats are alternatives; closed states show as with `--state` |
+  | `p:P`, `priority:P` | Priority (aliases accepted), or `none` for no priority. Repeats are alternatives |
+  | `label:L` | Has label L. Repeats must all match |
+  | `@WHO`, `assignee:WHO` | As `--assignee` (`@me` works) |
+  | `project:P` | Project by ID prefix, or by slug (exact, else a unique prefix): `project:auth` |
+  | `is:ready` | As `--ready` |
+  | `is:blocked` | At least one `X-Blocked-By` target is in an open state |
+  | `due:<DATE`, `due:>DATE` | `Reply-By` strictly before / after DATE (date input as in §6.2; `7d` and `2w` mean `+7d` and `+2w`). Undated issues never match |
+
+  Keys are case-insensitive. Only these keys are tokens; any other word
+  (`auth.rs:41` included) is free text, and each free-text word or quoted
+  phrase is a `--search` term, with the same semantics. Tokens combine with
+  the flags: list criteria (states, priorities, labels, terms) add up, and a
+  token for a single-valued one (assignee, project, due bound) replaces the
+  flag. A bad value is an error: `invalid-state` / `invalid-priority`
+  (exit 4, with `Valid:`), or `invalid-filter` (exit 1) for an unknown `is:`
+  value, an empty value, or a `due:` without `<`/`>`.
 - Performance: there is no index or cache (§1). Files are scanned in parallel
   in ordered batches, in path order, and the scan stops once the page
   (`--offset` + `--limit`) is full; `--sort` and `--limit 0` scan everything.
@@ -509,7 +557,8 @@ personal API key only (never stored). The workspace is the key's org.
   leaves those files alone. `--existing update`: Linear wins on the fields above;
   local-only headers (custom `X-*`, `Comments`, `Sensitivity`, `Expires`,
   `List-Id`) and local comments are kept; Linear comments are appended or edited
-  in place (`X-Edited`); one `X-Issue-Event: update` event lists the changes.
+  in place (`X-Edited`); one `X-Issue-Event: update` event lists the changes
+  (never coalesced, §5.3).
   Nothing is ever deleted locally.
 - Streaming: each page is fetched then written (atomic per file); progress goes
   to stderr. On failure what was written is kept and the error says how many were
@@ -540,22 +589,35 @@ No async, no database. `serde_json` is used only by the importer.
 
 ### 7.2 Layout
 
-One crate, split into a library (for front-ends such as a GUI) and the CLI
-binary. The library exposes `error`, `model`, `store` and `registry`
-(`load()`, `add()`, `remove()`, `resolve()`):
+A Cargo workspace (virtual manifest). Front-ends link the core library;
+neither shells out to the other:
 
 ```
-src/
-  lib.rs     # library: pub mod error, model, registry, store
-  main.rs    # binary: cli, format, linear, dates
-  cli/       # clap definitions + command handlers
-  model/     # Issue, Comment, Event, State, Priority, validation, normalization
-  store/     # root discovery, paths, slugs, ID resolution, mbox read/write, atomic write
-  registry.rs # repo registry (§2.7)
-  format/    # header-block output, --brief, error blocks
-  linear/    # Linear importer: GraphQL client + JSON → message mapping
-  dates.rs   # friendly date parsing
+Cargo.toml          # [workspace], shared package metadata, dependencies, lints
+crates/
+  core/             # package "lastissue-core", [lib] name = "lastissue"
+    src/
+      model/        # State, Priority, labels, addresses, messages, event lines
+      store/        # root discovery, paths, slugs, ID resolution, mbox read/write, atomic write
+      registry.rs   # repo registry (§2.7)
+      identity.rs   # From:/Sender: resolution (§4)
+      ops.rs        # every mutation, event generation and coalescing (§5.3)
+      query.rs      # filtering, sorting, paging, filter tokens (§6.4)
+      search.rs     # full-text terms and match context
+      source.rs     # IssueSource: issue heads for front-ends
+      dates.rs      # friendly date parsing
+      linear/       # Linear importer (feature "linear")
+  cli/              # package "cli", [[bin]] name = "lastissue"
+    src/cli/        # clap definitions + thin command handlers
+    src/format/     # header-block output, --brief, error blocks
+    tests/          # snapshot tests
+apps/
+  desktop/          # Tauri app: Svelte front-end + src-tauri (package "desktop",
+                    # [[bin]] name = "lastissue-gui"), see docs/GUI-SPEC.md
 ```
+
+The core has no clap, no TTY and no printing: functions take plain structs
+and return typed values or `lastissue::Error`.
 
 ### 7.3 Testing
 

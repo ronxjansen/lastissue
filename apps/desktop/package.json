@@ -36,10 +36,11 @@
   },
   "dependencies": {
     "@milkdown/kit": "7.23.0",
-    "@tanstack/svelte-virtual": "3.13.52",
     "@tauri-apps/api": "2.12.4",
     "@tauri-apps/plugin-clipboard-manager": "2.5.0",
     "@tauri-apps/plugin-deep-link": "2.6.3",
-    "@tauri-apps/plugin-dialog": "2.8.4"
+    "@tauri-apps/plugin-dialog": "2.8.4",
+    "dompurify": "^3.4.17",
+    "marked": "^18.1.3"
   }
 }
