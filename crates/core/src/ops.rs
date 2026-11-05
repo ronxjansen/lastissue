@@ -12,11 +12,13 @@
 use crate::dates;
 use crate::error::{Error, Result};
 use crate::identity::Identity;
-use crate::model::{self, Actor, Change, Priority, State, labels_of, list_of, set_list, state_of};
+use crate::model::{self, Actor, Change, Priority, State, list_of, set_list, state_of};
+use crate::query::contains_lower;
 use crate::store::mbox::{self, Msg};
 use crate::store::{self, IssueRef, Project, Store};
 use chrono::{DateTime, FixedOffset};
 use std::fs;
+use std::path::PathBuf;
 
 /// The result of an issue mutation: the issue's messages as written (or as
 /// read, when nothing changed) and which of them the operation appended.
@@ -43,10 +45,10 @@ impl Outcome {
 // ---------------------------------------------------------------- helpers
 
 fn date(input: &str) -> Result<String> {
-    Ok(dates::to_header(dates::parse(input, model::now())?))
+    Ok(dates::parse(input, model::now())?.to_rfc2822())
 }
 
-fn issue_message_id(store: &Store, id: &str) -> Result<String> {
+pub(crate) fn issue_message_id(store: &Store, id: &str) -> Result<String> {
     let r = store.resolve_issue(id)?;
     Ok(store.read_head(&r)?.message_id().to_string())
 }
@@ -79,13 +81,7 @@ fn removal_target(store: &Store, id: &str, existing: &[String]) -> Option<String
     if let Ok(mid) = issue_message_id(store, id) {
         return Some(mid);
     }
-    let q = id
-        .trim()
-        .trim_start_matches('<')
-        .split('@')
-        .next()
-        .unwrap_or("")
-        .to_ascii_uppercase();
+    let q = mbox::ulid_of(id).to_ascii_uppercase();
     existing
         .iter()
         .find(|e| !q.is_empty() && mbox::ulid_of(e).to_ascii_uppercase().starts_with(&q))
@@ -113,10 +109,6 @@ fn validate_duplicate(m: &mut Msg) -> Result<()> {
         m.remove("References");
     }
     Ok(())
-}
-
-fn contains_ci(hay: &str, needle: &str) -> bool {
-    hay.to_lowercase().contains(&needle.to_lowercase())
 }
 
 /// How long an update burst stays open, from its event's `Date`
@@ -169,7 +161,8 @@ fn merge_line(line: &str, c: &Change) -> Option<String> {
 /// dropped, as is an event left with no lines. Returns the index of the
 /// event holding the changes, or `None` when there is none.
 ///
-/// The single place update events are written; `now` is a parameter so
+/// Every update event an operation here writes goes through this (the
+/// Linear import writes its own, never coalesced); `now` is a parameter so
 /// the burst window can be tested.
 pub fn record_update(
     msgs: &mut Vec<Msg>,
@@ -310,14 +303,10 @@ pub fn create_issue(store: &Store, me: &Identity, new: &NewIssue) -> Result<Outc
 
     let existing: Vec<String> = store.issues()?.into_iter().map(|r| r.id).collect();
     let (ulid, id) = store::fresh_id(&existing);
-    let mut m = Msg::default();
+    let mut m = model::base_message(actor, &title);
     m.set("Message-ID", &model::message_id(ulid));
-    m.set("Date", &model::date_header(model::now()));
-    m.set("From", &actor.from);
-    m.set_opt("Sender", actor.sender.as_deref());
     m.set_opt("To", assignee.as_deref());
     set_list(&mut m, "Cc", &watchers);
-    m.set("Subject", &title);
     m.set("X-Issue-State", state.as_str());
     m.set_opt("X-Priority-Level", new.priority.map(Priority::as_str));
     set_list(
@@ -386,32 +375,26 @@ pub fn update_issue(store: &Store, me: &Identity, id: &str, u: &IssueUpdate) -> 
     let own = before.message_id().to_string();
 
     // Resolve all inputs first so a bad one leaves the file untouched.
-    let assignee = match &u.assignee {
-        Some(Some(w)) => Some(Some(me.who(w)?)),
-        Some(None) => Some(None),
-        None => None,
-    };
+    let who: &dyn Fn(&str) -> Result<String> = &|w| me.who(w);
+    let relation: &dyn Fn(&str) -> Result<String> = &|p| relation_target(store, p, Some(&own));
+    // Set-or-clear fields: header → new value (`None` removes it).
+    let mut set_or_clear: Vec<(&str, Option<String>)> = Vec::new();
+    for (header, field, resolve) in [
+        ("To", &u.assignee, who),
+        ("Reply-By", &u.due, &date),
+        ("Expires", &u.expires, &date),
+        ("X-Parent", &u.parent, relation),
+    ] {
+        if let Some(v) = field {
+            set_or_clear.push((header, v.as_deref().map(resolve).transpose()?));
+        }
+    }
     let watch: Vec<String> = u.watch.iter().map(|w| me.who(w)).collect::<Result<_>>()?;
     let unwatch: Vec<String> = u
         .unwatch
         .iter()
         .map(|w| me.who_pattern(w))
         .collect::<Result<_>>()?;
-    let due = match &u.due {
-        Some(Some(d)) => Some(Some(date(d)?)),
-        Some(None) => Some(None),
-        None => None,
-    };
-    let expires = match &u.expires {
-        Some(Some(d)) => Some(Some(date(d)?)),
-        Some(None) => Some(None),
-        None => None,
-    };
-    let parent = match &u.parent {
-        Some(Some(p)) => Some(Some(relation_target(store, p, Some(&own))?)),
-        Some(None) => Some(None),
-        None => None,
-    };
     let add_blocked: Vec<String> = u
         .add_blocked_by
         .iter()
@@ -439,18 +422,18 @@ pub fn update_issue(store: &Store, me: &Identity, id: &str, u: &IssueUpdate) -> 
     }
     if !u.add_labels.is_empty() || !u.remove_labels.is_empty() {
         let remove = model::normalize_labels(u.remove_labels.iter().map(String::as_str));
-        let mut labels = labels_of(m);
-        labels.extend(model::normalize_labels(
-            u.add_labels.iter().map(String::as_str),
-        ));
-        let labels: Vec<String> = model::normalize_labels(labels.iter().map(String::as_str))
-            .into_iter()
-            .filter(|l| !remove.contains(l))
-            .collect();
+        let labels: Vec<String> = model::normalize_labels(
+            m.get("Keywords")
+                .into_iter()
+                .chain(u.add_labels.iter().map(String::as_str)),
+        )
+        .into_iter()
+        .filter(|l| !remove.contains(l))
+        .collect();
         set_list(m, "Keywords", &labels);
     }
-    if let Some(w) = &assignee {
-        m.set_opt("To", w.as_deref());
+    for (header, v) in &set_or_clear {
+        m.set_opt(header, v.as_deref());
     }
     if !watch.is_empty() || !unwatch.is_empty() {
         let mut cc = list_of(m, "Cc");
@@ -462,18 +445,9 @@ pub fn update_issue(store: &Store, me: &Identity, id: &str, u: &IssueUpdate) -> 
         cc.retain(|c| {
             !unwatch
                 .iter()
-                .any(|u| model::email_of(c) == model::email_of(u) || contains_ci(c, u))
+                .any(|u| model::email_of(c) == model::email_of(u) || contains_lower(c, u))
         });
         set_list(m, "Cc", &cc);
-    }
-    if let Some(d) = &due {
-        m.set_opt("Reply-By", d.as_deref());
-    }
-    if let Some(e) = &expires {
-        m.set_opt("Expires", e.as_deref());
-    }
-    if let Some(p) = &parent {
-        m.set_opt("X-Parent", p.as_deref());
     }
     for (header, add, remove) in [
         ("X-Blocked-By", &add_blocked, &u.remove_blocked_by),
@@ -625,7 +599,11 @@ pub fn move_issue(
     let target = project.map(|p| store.resolve_project(p)).transpose()?;
     let mut msgs = store.read(&r)?;
     let before = msgs[0].clone();
-    let file_name = r.path.file_name().expect("issue file name").to_owned();
+    let file_name = r
+        .path
+        .file_name()
+        .ok_or_else(|| Error::validation("invalid-path").with("Path", store.rel(&r.path)))?
+        .to_owned();
     let dir = target
         .as_ref()
         .map_or_else(|| store.root.clone(), |p| p.dir.clone());
@@ -729,8 +707,7 @@ pub fn find_comment(store: &Store, q: &str) -> Result<CommentRef> {
             idx,
         });
     }
-    let needle =
-        model::normalize_id_input(q.trim_start_matches('<').split('@').next().unwrap_or(""));
+    let needle = model::normalize_id_input(mbox::ulid_of(q));
     if needle.is_empty() || !model::is_short_id(&needle) {
         return Err(invalid_comment_ref(q));
     }
@@ -876,14 +853,23 @@ pub fn delete_comment(store: &Store, me: &Identity, c: CommentRef) -> Result<Out
 /// `project create`: a folder `<slug>-<id>`, the slug being the first two
 /// words of `name`.
 pub fn create_project(store: &Store, name: &str) -> Result<Project> {
-    let slug = store::slugify(name, 2, "project");
-    let existing: Vec<String> = store.projects()?.into_iter().map(|p| p.id).collect();
-    let (_, id) = store::fresh_id(&existing);
-    let p = Project {
-        dir: store.root.join(format!("{slug}-{id}")),
+    new_project(
+        store,
+        store::slugify(name, 2, "project"),
+        &store.projects()?,
+    )
+}
+
+/// Create the folder for a project `slug`, its ID unique among `existing`.
+pub(crate) fn new_project(store: &Store, slug: String, existing: &[Project]) -> Result<Project> {
+    let ids: Vec<String> = existing.iter().map(|p| p.id.clone()).collect();
+    let (_, id) = store::fresh_id(&ids);
+    let mut p = Project {
         id,
         slug,
+        dir: PathBuf::new(),
     };
+    p.dir = store.root.join(p.dir_name());
     fs::create_dir(&p.dir)?;
     Ok(p)
 }
@@ -891,12 +877,11 @@ pub fn create_project(store: &Store, name: &str) -> Result<Project> {
 /// `project rename`: new slug, same id; the issues' `List-Id` follows.
 pub fn rename_project(store: &Store, project: &str, name: &str) -> Result<Project> {
     let old = store.resolve_project(project)?;
-    let slug = store::slugify(name, 2, "project");
-    let new = Project {
-        dir: store.root.join(format!("{slug}-{}", old.id)),
-        id: old.id.clone(),
-        slug,
+    let mut new = Project {
+        slug: store::slugify(name, 2, "project"),
+        ..old.clone()
     };
+    new.dir = store.root.join(new.dir_name());
     if new.dir != old.dir {
         if new.dir.exists() {
             return Err(Error::validation("project-exists").with("Path", store.rel(&new.dir)));

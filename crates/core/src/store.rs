@@ -4,7 +4,9 @@ pub mod mbox;
 
 use crate::error::{Error, Result};
 use crate::model::{self, State};
+use crate::query::Stats;
 use mbox::Msg;
+use std::collections::HashMap;
 use std::fs::{self, File};
 use std::io::{BufReader, Write};
 use std::path::{Path, PathBuf};
@@ -16,8 +18,12 @@ pub const ISSUES_DIR: &str = "issues";
 
 // ---------------------------------------------------------------- Root
 
-pub fn global_root() -> Result<PathBuf> {
+pub(crate) fn project_dirs() -> Option<directories::ProjectDirs> {
     directories::ProjectDirs::from("", "", "lastissue")
+}
+
+pub fn global_root() -> Result<PathBuf> {
+    project_dirs()
         .map(|d| d.data_dir().to_path_buf())
         .ok_or_else(|| {
             Error::not_found("no-global-dir")
@@ -32,8 +38,9 @@ fn not_initialized(root: &Path, hint: &str) -> Error {
 }
 
 /// Resolve the issues root (§2.1): `--root` / `--repo` / `LASTISSUE_DIR`
-/// (resolved by the caller, arriving via `flag`), nearest `.lastissue` upwards (at each level `issues/.lastissue`
-/// wins over `.lastissue`), then the global root.
+/// (resolved by the caller, arriving via `flag`), nearest `.lastissue`
+/// upwards (at each level `issues/.lastissue` wins over `.lastissue`), then
+/// the global root.
 pub fn discover(flag: Option<&Path>) -> Result<PathBuf> {
     if let Some(p) = flag {
         let p = absolute(p);
@@ -125,15 +132,8 @@ pub fn split_name(name: &str) -> Option<(&str, &str)> {
 pub fn fresh_id(existing: &[String]) -> (Ulid, String) {
     loop {
         let u = model::new_ulid();
-        let s = u.to_string().to_lowercase();
-        for len in 6..=8 {
-            let cand = &s[s.len() - len..];
-            if !existing
-                .iter()
-                .any(|e| e.starts_with(cand) || cand.starts_with(e.as_str()))
-            {
-                return (u, cand.to_string());
-            }
+        if let Some(id) = short_id_for(u, existing) {
+            return (u, id);
         }
     }
 }
@@ -154,9 +154,45 @@ pub fn short_id_for(u: Ulid, existing: &[String]) -> Option<String> {
     None
 }
 
+/// Items whose key is exactly `q`, else those whose key starts with it.
+pub(crate) fn matching<T>(
+    items: impl IntoIterator<Item = T>,
+    key: impl for<'a> Fn(&'a T) -> &'a str,
+    q: &str,
+) -> Vec<T> {
+    let (exact, prefixed): (Vec<T>, Vec<T>) = items
+        .into_iter()
+        .filter(|x| key(x).starts_with(q))
+        .partition(|x| key(x) == q);
+    if exact.is_empty() { prefixed } else { exact }
+}
+
+/// Atomic write: temp file in the same directory, then rename.
+pub(crate) fn atomic_write(path: &Path, bytes: &[u8]) -> Result<()> {
+    let dir = path
+        .parent()
+        .filter(|d| !d.as_os_str().is_empty())
+        .unwrap_or(Path::new("."));
+    let name = path
+        .file_name()
+        .map(|n| n.to_string_lossy().into_owned())
+        .unwrap_or_default();
+    let tmp = dir.join(format!(".{name}.{}.tmp", model::new_ulid()));
+    let res = (|| -> std::io::Result<()> {
+        let mut f = File::create(&tmp)?;
+        f.write_all(bytes)?;
+        f.sync_all()?;
+        fs::rename(&tmp, path)
+    })();
+    if res.is_err() {
+        let _ = fs::remove_file(&tmp);
+    }
+    Ok(res?)
+}
+
 // ---------------------------------------------------------------- Layout
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Project {
     pub id: String,
     pub slug: String,
@@ -188,6 +224,29 @@ pub struct Store {
 
 fn is_hidden(name: &str) -> bool {
     name.starts_with('.')
+}
+
+fn issues_in(dir: &Path, project: Option<&Project>, out: &mut Vec<IssueRef>) -> Result<()> {
+    let start = out.len();
+    for e in fs::read_dir(dir)? {
+        let e = e?;
+        let name = e.file_name().to_string_lossy().into_owned();
+        if is_hidden(&name) || !e.file_type()?.is_file() {
+            continue;
+        }
+        let Some(stem) = name.strip_suffix(".mbox") else {
+            continue;
+        };
+        if let Some((_, id)) = split_name(stem) {
+            out.push(IssueRef {
+                id: id.to_string(),
+                path: e.path(),
+                project: project.cloned(),
+            });
+        }
+    }
+    out[start..].sort_by(|a, b| a.path.file_name().cmp(&b.path.file_name()));
+    Ok(())
 }
 
 impl Store {
@@ -224,48 +283,20 @@ impl Store {
         Ok(out)
     }
 
-    fn issues_in(
-        &self,
-        dir: &Path,
-        project: Option<&Project>,
-        out: &mut Vec<IssueRef>,
-    ) -> Result<()> {
-        let start = out.len();
-        for e in fs::read_dir(dir)? {
-            let e = e?;
-            let name = e.file_name().to_string_lossy().into_owned();
-            if is_hidden(&name) || !e.file_type()?.is_file() {
-                continue;
-            }
-            let Some(stem) = name.strip_suffix(".mbox") else {
-                continue;
-            };
-            if let Some((_, id)) = split_name(stem) {
-                out.push(IssueRef {
-                    id: id.to_string(),
-                    path: e.path(),
-                    project: project.cloned(),
-                });
-            }
-        }
-        out[start..].sort_by(|a, b| a.path.file_name().cmp(&b.path.file_name()));
-        Ok(())
-    }
-
     /// All issues in path order (§6.4): root-level files first, then each
     /// project folder; filenames sorted within each folder.
     pub fn issues(&self) -> Result<Vec<IssueRef>> {
         let mut out = Vec::new();
-        self.issues_in(&self.root, None, &mut out)?;
+        issues_in(&self.root, None, &mut out)?;
         for p in self.projects()? {
-            self.issues_in(&p.dir, Some(&p), &mut out)?;
+            issues_in(&p.dir, Some(&p), &mut out)?;
         }
         Ok(out)
     }
 
     pub fn project_issues(&self, p: &Project) -> Result<Vec<IssueRef>> {
         let mut out = Vec::new();
-        self.issues_in(&p.dir, Some(p), &mut out)?;
+        issues_in(&p.dir, Some(p), &mut out)?;
         Ok(out)
     }
 
@@ -282,31 +313,13 @@ impl Store {
         mbox::read_head(BufReader::new(File::open(&r.path)?))
     }
 
-    pub fn stats(
-        &self,
-        r: &IssueRef,
-    ) -> Result<(usize, Option<chrono::DateTime<chrono::FixedOffset>>)> {
+    pub fn stats(&self, r: &IssueRef) -> Result<Stats> {
         mbox::scan_stats(BufReader::new(File::open(&r.path)?))
     }
 
     /// Atomic write: temp file in the same directory, then rename.
     pub fn write(&self, path: &Path, msgs: &[Msg]) -> Result<()> {
-        let dir = path.parent().unwrap_or(&self.root);
-        let name = path
-            .file_name()
-            .map(|n| n.to_string_lossy().into_owned())
-            .unwrap_or_default();
-        let tmp = dir.join(format!(".{name}.{}.tmp", model::new_ulid()));
-        let res = (|| -> std::io::Result<()> {
-            let mut f = File::create(&tmp)?;
-            f.write_all(mbox::serialize(msgs).as_bytes())?;
-            f.sync_all()?;
-            fs::rename(&tmp, path)
-        })();
-        if res.is_err() {
-            let _ = fs::remove_file(&tmp);
-        }
-        Ok(res?)
+        atomic_write(path, mbox::serialize(msgs).as_bytes())
     }
 
     /// The issue a path inside the root would be (it need not exist): a
@@ -353,8 +366,7 @@ impl Store {
     pub fn resolve_issue(&self, query: &str) -> Result<IssueRef> {
         let all = self.issues()?;
         let raw = query.trim();
-        let mut q = raw.trim_start_matches('<').trim_end_matches('>');
-        q = q.split('@').next().unwrap_or(q);
+        let mut q = mbox::ulid_of(raw);
         q = q.rsplit('/').next().unwrap_or(q);
         q = q.strip_suffix(".mbox").unwrap_or(q);
         let q = q.rsplit('-').next().unwrap_or(q);
@@ -379,10 +391,7 @@ impl Store {
             }
             return Err(not_found());
         }
-        let mut hits: Vec<IssueRef> = all.into_iter().filter(|r| r.id.starts_with(&q)).collect();
-        if let Some(exact) = hits.iter().position(|r| r.id == q) {
-            return Ok(hits.swap_remove(exact));
-        }
+        let mut hits = matching(all, |r| r.id.as_str(), &q);
         match hits.len() {
             0 => Err(not_found()),
             1 => Ok(hits.remove(0)),
@@ -395,14 +404,7 @@ impl Store {
         let q = raw.trim_end_matches('/');
         let q = q.rsplit('/').next().unwrap_or(q);
         let q = model::normalize_id_input(q.rsplit('-').next().unwrap_or(q));
-        let mut hits: Vec<Project> = self
-            .projects()?
-            .into_iter()
-            .filter(|p| p.id.starts_with(&q))
-            .collect();
-        if let Some(exact) = hits.iter().position(|p| p.id == q) {
-            return Ok(hits.swap_remove(exact));
-        }
+        let mut hits = matching(self.projects()?, |p| p.id.as_str(), &q);
         match hits.len() {
             0 => Err(Error::not_found("project-not-found")
                 .with("Project", raw)
@@ -414,35 +416,28 @@ impl Store {
 
     /// State of the issue with this Message-ID, found through the short-ID
     /// suffix of its filename (no full scan). `by_id`: short ID → ref.
-    /// None when no such issue exists (e.g. it was deleted).
+    /// `None` when no such issue exists (e.g. it was deleted).
     pub fn state_by_message_id(
         &self,
         message_id: &str,
-        by_id: &std::collections::HashMap<&str, &IssueRef>,
-    ) -> Option<State> {
+        by_id: &HashMap<&str, &IssueRef>,
+    ) -> Result<Option<State>> {
         let ulid = mbox::ulid_of(message_id).to_ascii_lowercase();
         for len in 6..=8 {
-            let Some(suffix) = ulid.get(ulid.len().saturating_sub(len)..) else {
+            let Some(r) = ulid
+                .len()
+                .checked_sub(len)
+                .and_then(|i| ulid.get(i..))
+                .and_then(|suffix| by_id.get(suffix))
+            else {
                 continue;
             };
-            if suffix.len() != len {
-                continue;
-            }
-            let Some(r) = by_id.get(suffix) else {
-                continue;
-            };
-            let Ok(head) = self.read_head(r) else {
-                continue;
-            };
+            let head = self.read_head(r)?;
             if head.message_id() == message_id {
-                return Some(
-                    head.get("X-Issue-State")
-                        .and_then(State::parse)
-                        .unwrap_or(State::Backlog),
-                );
+                return Ok(Some(model::state_of(&head)));
             }
         }
-        None
+        Ok(None)
     }
 }
 

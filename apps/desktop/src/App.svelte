@@ -18,19 +18,18 @@
   import Toolbar from "$lib/components/app/Toolbar.svelte";
 
   const resolver = new Resolver(app.keymap);
-  $effect(() => {
-    resolver.keymap = app.keymap;
-  });
 
   let ready = $state(false);
+  let failed = $state<string | null>(null);
   onMount(() => {
-    app.init().then(() => (ready = true), (e) => console.error(e));
+    app.init().then(() => (ready = true), (e) => (failed = String(e)));
   });
 
   function keydown(e: KeyboardEvent) {
     if (e.isComposing || e.defaultPrevented) return;
     const key = stroke(e);
     if (!key) return;
+    resolver.keymap = app.keymap;
     const hit = resolver.feed(key, app.contexts());
     if (!hit) return;
     e.preventDefault();
@@ -48,14 +47,14 @@
 <ModeWatcher />
 <Toaster position="bottom-right" />
 
-<div class="flex h-screen flex-col overflow-hidden bg-background text-foreground select-none">
+<div class="flex h-screen flex-col overflow-hidden select-none">
   <div class="flex min-h-0 flex-1">
     <Sidebar />
     <main class="@container flex min-w-0 flex-1 flex-col overflow-hidden">
       <Toolbar />
       <div class="min-h-0 flex-1" role="grid" tabindex="-1" onfocusin={() => (app.focus = "issues")}>
         {#if !ready}
-          <div class="grid h-full place-items-center text-sm text-muted-foreground">Loading…</div>
+          <div class="grid h-full place-items-center text-sm {failed ? 'text-danger' : 'text-muted-foreground'}">{failed ?? "Loading…"}</div>
         {:else if app.meta.current === null}
           <div class="grid h-full place-items-center">
             <div class="max-w-sm text-center text-sm text-muted-foreground">

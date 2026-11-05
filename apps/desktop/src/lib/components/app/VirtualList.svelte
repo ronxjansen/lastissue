@@ -7,31 +7,29 @@
     items,
     rowHeight,
     row,
-    scrollTo = null,
+    scrollTo = -1,
     overscan = 8,
     class: klass = "",
-    padTop = 0,
   }: {
     items: T[];
     rowHeight: number;
-    row: Snippet<[T, number]>;
-    scrollTo?: number | null;
+    row: Snippet<[T]>;
+    scrollTo?: number;
     overscan?: number;
     class?: string;
-    padTop?: number;
   } = $props();
 
   let el: HTMLDivElement | undefined = $state();
   let top = $state(0);
   let height = $state(600);
 
-  const first = $derived(Math.max(0, Math.floor((top - padTop) / rowHeight) - overscan));
+  const first = $derived(Math.max(0, Math.floor(top / rowHeight) - overscan));
   const last = $derived(Math.min(items.length, Math.ceil((top + height) / rowHeight) + overscan));
 
   $effect(() => {
-    if (scrollTo === null || !el || scrollTo < 0) return;
-    const y = padTop + scrollTo * rowHeight;
-    if (y < el.scrollTop + padTop) el.scrollTop = Math.max(0, y - padTop);
+    if (!el || scrollTo < 0) return;
+    const y = scrollTo * rowHeight;
+    if (y < el.scrollTop) el.scrollTop = y;
     else if (y + rowHeight > el.scrollTop + el.clientHeight) el.scrollTop = y + rowHeight - el.clientHeight;
   });
 </script>
@@ -42,10 +40,10 @@
   onscroll={() => (top = el!.scrollTop)}
   class="relative overflow-y-auto {klass}"
 >
-  <div style="height: {padTop + items.length * rowHeight}px" class="relative">
+  <div style="height: {items.length * rowHeight}px" class="relative">
     {#each items.slice(first, last) as item, i (first + i)}
-      <div class="absolute inset-x-0" style="top: {padTop + (first + i) * rowHeight}px; height: {rowHeight}px">
-        {@render row(item, first + i)}
+      <div class="absolute inset-x-0" style="top: {(first + i) * rowHeight}px; height: {rowHeight}px">
+        {@render row(item)}
       </div>
     {/each}
   </div>

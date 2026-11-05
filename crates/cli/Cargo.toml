@@ -10,8 +10,7 @@ name = "lastissue"
 path = "src/main.rs"
 
 [dependencies]
-lastissue = { workspace = true, features = ["linear"] }
-chrono.workspace = true
+lastissue = { workspace = true, features = ["linear", "clap"] }
 clap.workspace = true
 inquire.workspace = true
 
@@ -19,6 +18,7 @@ inquire.workspace = true
 assert_cmd.workspace = true
 insta.workspace = true
 mockito.workspace = true
+regex.workspace = true
 serde_json.workspace = true
 tempfile.workspace = true
 

@@ -9,76 +9,9 @@ pub mod project;
 
 use crate::model::{Priority, State};
 use clap::{Args, Parser, Subcommand, ValueEnum};
-use lastissue::linear::import as core_import;
+use lastissue::linear::import::Existing;
 use lastissue::query::Sort;
 use std::path::PathBuf;
-
-/// clap mirror of [`State`] (core stays clap-free). Variant order and aliases
-/// define `--help` and the `Valid:` list on errors, so keep them in sync.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, ValueEnum)]
-pub enum StateArg {
-    Backlog,
-    Todo,
-    #[value(
-        alias = "in progress",
-        alias = "in_progress",
-        alias = "inprogress",
-        alias = "doing",
-        alias = "wip"
-    )]
-    InProgress,
-    #[value(
-        alias = "in review",
-        alias = "in_review",
-        alias = "inreview",
-        alias = "review"
-    )]
-    InReview,
-    #[value(alias = "complete", alias = "completed", alias = "closed")]
-    Done,
-    #[value(alias = "canceled")]
-    Cancelled,
-    #[value(alias = "duplicated", alias = "dup")]
-    Duplicate,
-}
-
-impl From<StateArg> for State {
-    fn from(s: StateArg) -> State {
-        match s {
-            StateArg::Backlog => State::Backlog,
-            StateArg::Todo => State::Todo,
-            StateArg::InProgress => State::InProgress,
-            StateArg::InReview => State::InReview,
-            StateArg::Done => State::Done,
-            StateArg::Cancelled => State::Cancelled,
-            StateArg::Duplicate => State::Duplicate,
-        }
-    }
-}
-
-/// clap mirror of [`Priority`].
-#[derive(Clone, Copy, Debug, PartialEq, Eq, ValueEnum)]
-pub enum PriorityArg {
-    #[value(alias = "p0", alias = "u", alias = "critical", alias = "crit")]
-    Urgent,
-    #[value(alias = "p1", alias = "h", alias = "hi")]
-    High,
-    #[value(alias = "p2", alias = "m", alias = "med", alias = "normal")]
-    Medium,
-    #[value(alias = "p3", alias = "l", alias = "lo", alias = "minor")]
-    Low,
-}
-
-impl From<PriorityArg> for Priority {
-    fn from(p: PriorityArg) -> Priority {
-        match p {
-            PriorityArg::Urgent => Priority::Urgent,
-            PriorityArg::High => Priority::High,
-            PriorityArg::Medium => Priority::Medium,
-            PriorityArg::Low => Priority::Low,
-        }
-    }
-}
 
 const ABOUT: &str = "A local, plaintext issue tracker. One mbox file per issue.";
 const LONG_ABOUT: &str = "\
@@ -108,12 +41,13 @@ Examples:
 #[derive(Parser, Debug)]
 #[command(name = "lastissue", version, about = ABOUT, long_about = LONG_ABOUT)]
 pub struct Cli {
-    /// Issues root directory (overrides discovery) [env: LASTISSUE_DIR]
+    // Discovery reads LASTISSUE_DIR itself (it's not a clap `env`).
     #[arg(
         long,
         global = true,
         value_name = "PATH",
-        help_heading = "Global options"
+        help_heading = "Global options",
+        help = "Issues root directory (overrides discovery) [env: LASTISSUE_DIR]"
     )]
     pub root: Option<PathBuf>,
 
@@ -260,23 +194,6 @@ Examples:
     Linear(Box<LinearArgs>),
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, ValueEnum)]
-pub enum Existing {
-    /// Leave already-imported issues untouched
-    Skip,
-    /// Linear wins on the fields it owns; local-only headers and comments stay
-    Update,
-}
-
-impl From<Existing> for core_import::Existing {
-    fn from(e: Existing) -> core_import::Existing {
-        match e {
-            Existing::Skip => core_import::Existing::Skip,
-            Existing::Update => core_import::Existing::Update,
-        }
-    }
-}
-
 #[derive(Args, Debug)]
 pub struct LinearArgs {
     /// Linear personal API key
@@ -373,18 +290,8 @@ pub struct BodyArgs {
     #[arg(long, value_name = "PATH", conflicts_with = "stdin")]
     pub body_file: Option<PathBuf>,
     /// Pass "-" to read the body from stdin
-    #[arg(value_name = "-", value_parser = parse_dash)]
-    pub stdin: Option<bool>,
-}
-
-fn parse_dash(s: &str) -> Result<bool, String> {
-    if s == "-" {
-        Ok(true)
-    } else {
-        Err(format!(
-            "unexpected argument '{s}'; only \"-\" (read body from stdin) is accepted here"
-        ))
-    }
+    #[arg(value_name = "-", value_parser = ["-"], hide_possible_values = true)]
+    pub stdin: Option<String>,
 }
 
 // ---------------------------------------------------------------- issue
@@ -543,10 +450,10 @@ pub struct CreateArgs {
     pub body: BodyArgs,
     /// Initial state [default: backlog]
     #[arg(long, value_enum, ignore_case = true, value_name = "S")]
-    pub state: Option<StateArg>,
+    pub state: Option<State>,
     /// Priority
     #[arg(long, value_enum, ignore_case = true, value_name = "P")]
-    pub priority: Option<PriorityArg>,
+    pub priority: Option<Priority>,
     /// Label (repeatable, comma-separated ok)
     #[arg(long, value_name = "L")]
     pub label: Vec<String>,
@@ -608,7 +515,7 @@ pub struct ListArgs {
     pub no_project: bool,
     /// Only these states (repeatable; shows closed states too)
     #[arg(long, value_enum, ignore_case = true, value_name = "S")]
-    pub state: Vec<StateArg>,
+    pub state: Vec<State>,
     /// Include closed issues
     #[arg(long)]
     pub all: bool,
@@ -636,8 +543,11 @@ pub struct ListArgs {
     /// Only issues past their Expires: date
     #[arg(long)]
     pub expired: bool,
-    /// Case-insensitive text in the subject, body or comments (repeatable, ANDed)
-    #[arg(long, value_name = "TEXT")]
+    #[arg(
+        long,
+        value_name = "TEXT",
+        help = "Case-insensitive text in the subject, body or comments (repeatable, ANDed)"
+    )]
     pub search: Vec<String>,
     /// Treat every --search term as a regex (ripgrep syntax)
     #[arg(long, requires = "search")]
@@ -671,7 +581,7 @@ pub struct UpdateArgs {
     pub body: BodyArgs,
     /// New state
     #[arg(long, value_enum, ignore_case = true, value_name = "S")]
-    pub state: Option<StateArg>,
+    pub state: Option<State>,
     /// New priority
     #[arg(
         long,
@@ -680,7 +590,7 @@ pub struct UpdateArgs {
         value_name = "P",
         conflicts_with = "no_priority"
     )]
-    pub priority: Option<PriorityArg>,
+    pub priority: Option<Priority>,
     /// Remove the priority
     #[arg(long)]
     pub no_priority: bool,
@@ -708,9 +618,12 @@ pub struct UpdateArgs {
     /// Remove the due date
     #[arg(long)]
     pub no_due: bool,
-    /// Set the stale date ("" removes it)
-    #[arg(long, value_name = "DATE")]
+    /// Set the stale date
+    #[arg(long, value_name = "DATE", conflicts_with = "no_expires")]
     pub expires: Option<String>,
+    /// Remove the stale date
+    #[arg(long)]
+    pub no_expires: bool,
     /// Set the parent issue
     #[arg(long, value_name = "ID", conflicts_with = "no_parent")]
     pub parent: Option<String>,
@@ -796,17 +709,17 @@ Examples:
 mod tests {
     use super::*;
 
-    /// Every clap name and alias must parse to the same value in core.
+    /// Every clap name and alias must agree with core's lenient parse.
     #[test]
-    fn mirror_enums_match_core_parse() {
-        for v in StateArg::value_variants() {
+    fn clap_values_match_core_parse() {
+        for v in State::value_variants() {
             for name in v.to_possible_value().unwrap().get_name_and_aliases() {
-                assert_eq!(State::parse(name), Some(State::from(*v)), "{name}");
+                assert_eq!(State::parse(name), Some(*v), "{name}");
             }
         }
-        for v in PriorityArg::value_variants() {
+        for v in Priority::value_variants() {
             for name in v.to_possible_value().unwrap().get_name_and_aliases() {
-                assert_eq!(Priority::parse(name), Some(Priority::from(*v)), "{name}");
+                assert_eq!(Priority::parse(name), Some(*v), "{name}");
             }
         }
     }

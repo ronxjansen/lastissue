@@ -1,9 +1,9 @@
-//! Two-tier search (GUI-SPEC §6). Plain data, no GPUI; the workspace runs
-//! [`scan`] on a background executor.
+//! Two-tier search (GUI-SPEC §6). Plain data; the workspace runs [`scan`]
+//! on a background thread.
 //!
 //! 1. **Instant**, in memory: every free-text term is looked up in the
 //!    title, short ID, labels, assignee and project of each summary
-//!    ([`classify`]), mirroring core's `instant_match`.
+//!    ([`classify`], via core's `term_tier`).
 //! 2. **Full text**: an issue with a term the instant tier didn't find is a
 //!    [`Candidate`]; [`scan`] reads its file and runs core's search over
 //!    the body and comments for just the missing terms, keeping snippets.
@@ -14,32 +14,13 @@
 //! title is a title match; one term only in a comment is a comment match).
 
 use lastissue::index::Index;
-use lastissue::query::Filter;
+pub use lastissue::query::Tier;
+use lastissue::query::{Filter, term_tier};
 use lastissue::search::Terms;
 use lastissue::source::IssueSummary;
 use lastissue::store::mbox;
 use rayon::prelude::*;
 use std::path::PathBuf;
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub enum Tier {
-    Title,
-    /// Short ID, a label, the assignee or the project.
-    Field,
-    Body,
-    Comment,
-}
-
-impl Tier {
-    pub fn label(self) -> &'static str {
-        match self {
-            Tier::Title => "title",
-            Tier::Field => "label/ID",
-            Tier::Body => "body",
-            Tier::Comment => "comment",
-        }
-    }
-}
 
 /// Where a full-text term matched: `body` or `#n` (comment number), and
 /// the line around the hit.
@@ -70,21 +51,6 @@ pub struct Candidate {
     pub updated: i64,
     pub tier: Tier,
     pub missing: Vec<usize>,
-}
-
-use lastissue::query::contains_lower as contains_ci;
-
-/// The best instant tier for one (lowercased) term.
-pub fn term_tier(s: &IssueSummary, t: &str) -> Option<Tier> {
-    if contains_ci(&s.title, t) {
-        return Some(Tier::Title);
-    }
-    let field = s.id.starts_with(t)
-        || s.labels.iter().any(|l| contains_ci(l, t))
-        || s.assignee.as_deref().is_some_and(|a| contains_ci(a, t))
-        || s.project_slug.as_deref().is_some_and(|p| contains_ci(p, t))
-        || s.project.as_deref().is_some_and(|p| p.starts_with(t));
-    field.then_some(Tier::Field)
 }
 
 fn updated(s: &IssueSummary) -> i64 {
@@ -247,7 +213,6 @@ mod tests {
     use lastissue::model::{Actor, State};
     use lastissue::ops::{self, CommentTarget, NewIssue};
     use lastissue::query::ListQuery;
-    use lastissue::source::FsScan;
     use lastissue::store::{self, Store};
 
     struct Fx {
@@ -306,7 +271,7 @@ mod tests {
             }
         }
         let mut ix = Index::default();
-        ix.apply(index::scan(&s, &FsScan::new(s.clone())).unwrap());
+        ix.apply(index::scan(&s).unwrap());
         Fx {
             _dir: dir,
             s,
@@ -371,23 +336,6 @@ mod tests {
         let r = run(&f, "login state:done");
         assert_eq!(r.len(), 1);
         assert_eq!(r[0].0, "Slow startup");
-    }
-
-    #[test]
-    fn classify_matches_core_instant_tier() {
-        let f = fx();
-        let terms = vec!["login".to_string()];
-        for s in f.ix.iter() {
-            assert_eq!(
-                classify(s, &terms).is_ok(),
-                lastissue::query::instant_match(s, &terms),
-                "{}",
-                s.title
-            );
-        }
-        // No terms: everything that passes the fields is a title-tier hit.
-        let s = f.ix.iter().next().unwrap();
-        assert_eq!(classify(s, &[]).unwrap().tier, Tier::Title);
     }
 
     #[test]

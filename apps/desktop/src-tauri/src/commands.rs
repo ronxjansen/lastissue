@@ -2,12 +2,14 @@
 //! Every command is `async`, so it runs off the main thread; results come
 //! back as values, and everything else is pushed as events.
 
-use crate::dto::{self, EditDto, GroupKeyDto, NewIssueDto, PickOptionDto, Snapshot, ViewDto};
+use crate::dto::{self, EditDto, GroupKeyDto, NewIssueDto, PickOptionDto, Snapshot};
+use crate::format::error_line;
 use crate::keymap::UserKeymap;
 use crate::link::Link;
 use crate::state::draft::FieldKind;
 use crate::state::edit::Op;
-use crate::state::picker::PickerKind;
+use crate::state::picker::{self, PickerKind};
+use crate::state::view_state::ViewState;
 use crate::state::workspace::{self as ws, SharedHub};
 use std::sync::Mutex;
 use tauri::State;
@@ -16,7 +18,10 @@ type Hub<'a> = State<'a, SharedHub>;
 type Res<T = ()> = Result<T, String>;
 
 /// The user keymap as last loaded, and its file watcher.
-pub struct Keymap(pub Mutex<UserKeymap>, #[allow(dead_code)] pub Option<notify::RecommendedWatcher>);
+pub struct Keymap {
+    pub current: Mutex<UserKeymap>,
+    pub _watcher: Option<notify::RecommendedWatcher>,
+}
 
 pub fn handler() -> impl Fn(tauri::ipc::Invoke) -> bool + Send + Sync + 'static {
     tauri::generate_handler![
@@ -37,10 +42,10 @@ pub fn handler() -> impl Fn(tauri::ipc::Invoke) -> bool + Send + Sync + 'static 
         create_project,
         rename_project,
         picker_options,
+        picker_typed,
         search,
         open_repo,
         add_repo,
-        open_url,
         issue_link,
         open_keymap_file,
     ]
@@ -48,13 +53,14 @@ pub fn handler() -> impl Fn(tauri::ipc::Invoke) -> bool + Send + Sync + 'static 
 
 #[tauri::command]
 async fn snapshot(hub: Hub<'_>, keymap: State<'_, Keymap>) -> Res<Snapshot> {
-    let km = keymap.0.lock().map_err(|e| e.to_string())?.clone();
-    Ok(hub.lock().snapshot(km))
+    let km = keymap.current.lock().map_err(|e| e.to_string())?.clone();
+    Ok(Snapshot::new(&hub.lock(), km))
 }
 
 #[tauri::command]
-async fn set_view(hub: Hub<'_>, view: ViewDto) -> Res {
-    ws::set_view(&hub, &view)
+async fn set_view(hub: Hub<'_>, view: ViewState) -> Res {
+    ws::set_view(&hub, view);
+    Ok(())
 }
 
 #[tauri::command]
@@ -123,11 +129,14 @@ async fn add_comment(hub: Hub<'_>, id: String, body: String, reply_to: Option<St
 
 #[tauri::command]
 async fn edit_comment(hub: Hub<'_>, id: String, message_id: String, body: String) -> Res {
-    ws::run(&hub, Op::EditComment {
-        id,
-        message_id,
-        body,
-    })
+    ws::run(
+        &hub,
+        Op::EditComment {
+            id,
+            message_id,
+            body,
+        },
+    )
     .map(drop)
 }
 
@@ -159,13 +168,18 @@ fn picker_kind(kind: &str) -> Res<PickerKind> {
 }
 
 #[tauri::command]
-async fn picker_options(
+async fn picker_options(hub: Hub<'_>, kind: String, ids: Vec<String>) -> Res<Vec<PickOptionDto>> {
+    Ok(picker::options_for(&hub, picker_kind(&kind)?, &ids))
+}
+
+#[tauri::command]
+async fn picker_typed(
     hub: Hub<'_>,
     kind: String,
     ids: Vec<String>,
     query: String,
-) -> Res<Vec<PickOptionDto>> {
-    Ok(ws::picker_options(&hub, picker_kind(&kind)?, &ids, &query))
+) -> Res<Option<PickOptionDto>> {
+    Ok(picker::typed_for(&hub, picker_kind(&kind)?, &ids, &query))
 }
 
 #[tauri::command]
@@ -183,25 +197,17 @@ async fn open_repo(hub: Hub<'_>, index: usize) -> Res {
         .get(index)
         .cloned()
         .ok_or_else(|| format!("no repo #{}", index + 1))?;
-    ws::open_repo(&hub, repo);
-    Ok(())
+    ws::open_repo(&hub, repo)
 }
 
 /// Register a folder (its issues root is found as the CLI would) and open it.
 #[tauri::command]
 async fn add_repo(hub: Hub<'_>, path: String) -> Res {
     let root = lastissue::store::discover(Some(std::path::Path::new(&path)))
-        .map_err(|e| e.to_string().trim().replace('\n', " · "))?;
-    let repo = lastissue::registry::add(&root).map_err(|e| e.to_string().trim().replace('\n', " · "))?;
-    hub.lock().repos = lastissue::registry::load().map_err(|e| e.to_string())?;
-    ws::open_repo(&hub, repo);
-    Ok(())
-}
-
-#[tauri::command]
-async fn open_url(hub: Hub<'_>, url: String) -> Res {
-    ws::open_url(&hub, &url);
-    Ok(())
+        .map_err(|e| error_line(&e))?;
+    let repo = lastissue::registry::add(&root).map_err(|e| error_line(&e))?;
+    hub.lock().repos = lastissue::registry::load().map_err(|e| error_line(&e))?;
+    ws::open_repo(&hub, repo)
 }
 
 #[tauri::command]
@@ -225,10 +231,15 @@ async fn open_keymap_file() -> Res<String> {
         }
         std::fs::write(&path, crate::keymap::TEMPLATE).map_err(|e| e.to_string())?;
     }
-    let opener = if cfg!(target_os = "macos") { "open" } else { "xdg-open" };
-    std::process::Command::new(opener)
-        .arg(&path)
-        .spawn()
-        .map_err(|e| e.to_string())?;
+    let mut open = if cfg!(target_os = "macos") {
+        std::process::Command::new("open")
+    } else if cfg!(windows) {
+        let mut c = std::process::Command::new("cmd");
+        c.args(["/c", "start", ""]);
+        c
+    } else {
+        std::process::Command::new("xdg-open")
+    };
+    open.arg(&path).spawn().map_err(|e| e.to_string())?;
     Ok(path.display().to_string())
 }

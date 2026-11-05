@@ -1,11 +1,13 @@
 //! Linear-style property pickers (GUI-SPEC §5, §7): the options for one
-//! property of one issue, filtered as the user types. Plain data; the view
-//! renders it and commits the chosen [`Edit`] to every target issue (one,
-//! or the multi-selection for a bulk edit). The front-end's `⌘K` palette
-//! uses the same scoring as [`score`].
+//! property of the target issues (one, or the multi-selection for a bulk
+//! edit), and the option the typed text stands for. The front-end ranks
+//! them as the user types and commits the chosen [`Edit`]. State and
+//! priority options are labelled with their canonical value (`in-progress`,
+//! `none`); the front-end titles them.
 
 use super::edit::Edit;
-use super::view_state::{priority_label, state_label};
+use super::workspace::SharedHub;
+use crate::dto::PickOptionDto;
 use lastissue::index::Index;
 use lastissue::model::{self, Priority, State};
 use lastissue::source::IssueSummary;
@@ -39,30 +41,6 @@ fn opt(label: impl Into<String>, checked: bool, edit: Edit) -> PickOption {
     }
 }
 
-/// Case-insensitive subsequence match; lower is better, `None` is no match.
-/// Prefix beats word start beats scattered.
-pub fn score(query: &str, text: &str) -> Option<usize> {
-    let q = query.trim().to_lowercase();
-    if q.is_empty() {
-        return Some(0);
-    }
-    let t = text.to_lowercase();
-    if t.starts_with(&q) {
-        return Some(0);
-    }
-    if let Some(i) = t.find(&q) {
-        let word_start = t[..i].ends_with([' ', '-', '<', '@', '.']);
-        return Some(if word_start { 1 } else { 2 + i });
-    }
-    let mut chars = t.char_indices();
-    let mut last = 0;
-    for qc in q.chars() {
-        let (i, _) = chars.find(|(_, c)| *c == qc)?;
-        last = i;
-    }
-    Some(100 + last)
-}
-
 /// The options for `kind` over `targets` (one issue, or a selection),
 /// unfiltered. An option is checked when every target has that value.
 pub fn options(
@@ -78,7 +56,7 @@ pub fn options(
             .into_iter()
             // Duplicate needs an original (`issue close --duplicate-of`).
             .filter(|st| *st != State::Duplicate || all(&|s| s.state == State::Duplicate))
-            .map(|st| opt(state_label(st), all(&|s| s.state == st), Edit::State(st)))
+            .map(|st| opt(st.as_str(), all(&|s| s.state == st), Edit::State(st)))
             .collect(),
         PickerKind::Priority => [
             None,
@@ -90,7 +68,7 @@ pub fn options(
         .into_iter()
         .map(|p| {
             opt(
-                priority_label(p),
+                p.map_or("none", Priority::as_str),
                 all(&|s| s.priority == p),
                 Edit::Priority(p),
             )
@@ -184,7 +162,7 @@ pub fn options(
             projects.sort_by(|a, b| a.slug.cmp(&b.slug));
             for p in projects {
                 out.push(opt(
-                    p.slug.replace('-', " "),
+                    crate::format::project_name(&p.slug),
                     all(&|s| s.project.as_deref() == Some(p.id.as_str())),
                     Edit::Project(Some(p.id.clone())),
                 ));
@@ -194,9 +172,8 @@ pub fn options(
     }
 }
 
-/// An option made from the typed text, when it's a value the list doesn't
-/// have: a new label, an address, a date.
-fn typed(kind: PickerKind, query: &str, targets: &[&IssueSummary]) -> Option<PickOption> {
+/// An option made from the typed text: a new label, an address, a date.
+pub fn typed(kind: PickerKind, query: &str, targets: &[&IssueSummary]) -> Option<PickOption> {
     let q = query.trim();
     if q.is_empty() {
         return None;
@@ -234,36 +211,30 @@ fn typed(kind: PickerKind, query: &str, targets: &[&IssueSummary]) -> Option<Pic
     }
 }
 
-/// The visible options for `query`, best match first (ties keep list
-/// order), with the typed-value option first when there is one.
-pub fn filtered(
-    kind: PickerKind,
-    query: &str,
-    targets: &[&IssueSummary],
-    ix: &Index,
-    me: Option<&str>,
-) -> Vec<PickOption> {
-    let mut scored: Vec<(usize, usize, PickOption)> = options(kind, targets, ix, me)
+/// The picker's options for the target issues, unranked.
+pub fn options_for(hub: &SharedHub, kind: PickerKind, ids: &[String]) -> Vec<PickOptionDto> {
+    let ws = hub.lock();
+    let Some(r) = &ws.repo else {
+        return Vec::new();
+    };
+    let targets: Vec<_> = ids.iter().filter_map(|id| r.index.by_id(id)).collect();
+    options(kind, &targets, &r.index, ws.me())
         .into_iter()
-        .enumerate()
-        .filter_map(|(i, o)| {
-            let hay = match &o.detail {
-                Some(d) => format!("{} {d}", o.label),
-                None => o.label.clone(),
-            };
-            score(query, &hay).map(|sc| (sc, i, o))
-        })
-        .collect();
-    scored.sort_by_key(|(sc, i, _)| (*sc, *i));
-    let exact = scored
-        .iter()
-        .any(|(_, _, o)| o.label.eq_ignore_ascii_case(query.trim()));
-    let mut out: Vec<PickOption> = Vec::new();
-    if !exact {
-        out.extend(typed(kind, query, targets));
-    }
-    out.extend(scored.into_iter().map(|(_, _, o)| o));
-    out
+        .map(Into::into)
+        .collect()
+}
+
+/// The option the picker's typed text stands for, if any.
+pub fn typed_for(
+    hub: &SharedHub,
+    kind: PickerKind,
+    ids: &[String],
+    query: &str,
+) -> Option<PickOptionDto> {
+    let ws = hub.lock();
+    let r = ws.repo.as_ref()?;
+    let targets: Vec<_> = ids.iter().filter_map(|id| r.index.by_id(id)).collect();
+    typed(kind, query, &targets).map(Into::into)
 }
 
 #[cfg(test)]
@@ -273,7 +244,6 @@ mod tests {
     use lastissue::index;
     use lastissue::model::Actor;
     use lastissue::ops::{self, NewIssue};
-    use lastissue::source::FsScan;
     use lastissue::store::{self, Store};
 
     fn fx() -> (tempfile::TempDir, Index) {
@@ -297,7 +267,7 @@ mod tests {
             ops::create_issue(&s, &me, &n).unwrap();
         }
         let mut ix = Index::default();
-        ix.apply(index::scan(&s, &FsScan::new(s.clone())).unwrap());
+        ix.apply(index::scan(&s).unwrap());
         (dir, ix)
     }
 
@@ -312,23 +282,14 @@ mod tests {
     }
 
     #[test]
-    fn scoring_prefers_prefix_then_word_then_scattered() {
-        assert_eq!(score("", "x"), Some(0));
-        assert_eq!(score("in", "In progress"), Some(0));
-        assert_eq!(score("pro", "In progress"), Some(1));
-        assert!(score("ipg", "In progress").unwrap() >= 100);
-        assert_eq!(score("zz", "In progress"), None);
-    }
-
-    #[test]
     fn state_and_priority_mark_current() {
         let (_d, ix) = fx();
         let s = one(&ix);
         let v = options(PickerKind::State, &[&s], &ix, None);
         assert_eq!(v.len(), 6, "duplicate is not offered");
-        assert_eq!(labels(&v)[0], "*Backlog");
-        let v = filtered(PickerKind::Priority, "hi", &[&s], &ix, None);
-        assert_eq!(labels(&v), ["High"]);
+        assert_eq!(labels(&v)[0], "*backlog");
+        let v = options(PickerKind::Priority, &[&s], &ix, None);
+        assert_eq!(labels(&v), ["*none", "urgent", "high", "medium", "low"]);
     }
 
     #[test]
@@ -339,11 +300,10 @@ mod tests {
         assert_eq!(labels(&v), ["*bug", "feature", "*ui"]);
         assert_eq!(v[0].edit, Edit::RemoveLabel("bug".into()));
         assert_eq!(v[1].edit, Edit::AddLabel("feature".into()));
-        let v = filtered(PickerKind::Labels, "Perf", &[&s], &ix, None);
-        assert_eq!(v[0].edit, Edit::AddLabel("perf".into()));
-        // An existing label typed exactly isn't offered twice.
-        let v = filtered(PickerKind::Labels, "feature", &[&s], &ix, None);
-        assert_eq!(labels(&v), ["feature"]);
+        let t = typed(PickerKind::Labels, "Perf", &[&s]).unwrap();
+        assert_eq!(t.edit, Edit::AddLabel("perf".into()));
+        // A label every target has isn't offered to add.
+        assert_eq!(typed(PickerKind::Labels, "bug", &[&s]), None);
     }
 
     #[test]
@@ -357,20 +317,18 @@ mod tests {
             Some("Ada <ada@example.com>"),
         );
         assert_eq!(labels(&v), ["No assignee", "Ada (me)", "*Bob"]);
-        let v = filtered(PickerKind::Assignee, "carol@x.org", &[&s], &ix, None);
-        assert_eq!(v[0].edit, Edit::Assignee(Some("carol@x.org".into())));
-        let v = filtered(PickerKind::Assignee, "bob", &[&s], &ix, None);
-        assert_eq!(labels(&v), ["*Bob"]);
+        let t = typed(PickerKind::Assignee, "carol@x.org", &[&s]).unwrap();
+        assert_eq!(t.edit, Edit::Assignee(Some("carol@x.org".into())));
+        assert_eq!(typed(PickerKind::Assignee, "bob", &[&s]), None);
     }
 
     #[test]
     fn due_parses_typed_dates_and_projects_list() {
         let (_d, ix) = fx();
         let s = one(&ix);
-        let v = filtered(PickerKind::Due, "2031-02-03", &[&s], &ix, None);
-        assert_eq!(v[0].edit, Edit::Due(Some("2031-02-03".into())));
-        let v = filtered(PickerKind::Due, "nonsense", &[&s], &ix, None);
-        assert!(v.is_empty());
+        let t = typed(PickerKind::Due, "2031-02-03", &[&s]).unwrap();
+        assert_eq!(t.edit, Edit::Due(Some("2031-02-03".into())));
+        assert_eq!(typed(PickerKind::Due, "nonsense", &[&s]), None);
         let v = options(PickerKind::Project, &[&s], &ix, None);
         assert_eq!(labels(&v), ["*No project", "auth flow"]);
     }
@@ -386,7 +344,7 @@ mod tests {
         assert_eq!(labels(&v), ["bug", "feature", "ui"]);
         assert_eq!(v[0].edit, Edit::AddLabel("bug".into()));
         let v = options(PickerKind::State, &both, &ix, None);
-        assert_eq!(labels(&v)[0], "*Backlog", "both are in the backlog");
+        assert_eq!(labels(&v)[0], "*backlog", "both are in the backlog");
         let v = options(PickerKind::Assignee, &both, &ix, None);
         assert!(v.iter().all(|o| !o.checked));
     }

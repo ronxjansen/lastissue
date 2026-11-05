@@ -4,13 +4,13 @@
      confirm; the composer at the end adds one (⌘↵). -->
 <script lang="ts">
   import type { Activity } from "$lib/api";
-  import { app } from "$lib/app.svelte";
+  import { app, report } from "$lib/app.svelte";
   import { ago, dateTime } from "$lib/format";
   import { Button } from "$lib/components/ui/button";
   import Markdown from "./Markdown.svelte";
   import MarkdownEditor from "./MarkdownEditor.svelte";
 
-  let { items, issueId }: { items: Activity[]; issueId: string } = $props();
+  let { items }: { items: Activity[] } = $props();
 
   const COLLAPSE_RUN = 3;
   type Block =
@@ -36,15 +36,6 @@
   let composerReset = $state(0);
   let posting = $state(false);
 
-  // A different issue: drop per-issue UI state.
-  $effect(() => {
-    void issueId;
-    expanded = {};
-    editing = null;
-    composer = "";
-    composerReset++;
-  });
-
   async function post() {
     if (!composer.trim() || posting) return;
     posting = true;
@@ -53,7 +44,7 @@
       composer = "";
       composerReset++;
     } catch (e) {
-      console.error(e);
+      report(e);
     } finally {
       posting = false;
     }
@@ -68,15 +59,13 @@
       await app.editComment(mid, editText);
       editing = null;
     } catch (e) {
-      console.error(e);
+      report(e);
     }
   }
 
   function eventSummary(e: Extract<Activity, { kind: "event" }>): string {
-    if (e.event === "update") return e.lines.join(" · ") || "updated";
-    if (e.event === "move") return e.lines.join(" · ") || "moved";
     if (e.event === "comment-deleted") return "deleted a comment";
-    return e.lines.join(" · ") || e.event;
+    return e.lines.join(" · ") || (e.event === "move" ? "moved" : "updated");
   }
 </script>
 
@@ -101,7 +90,7 @@
               aria-hidden="true"
             ></span>
             <span class="min-w-0 flex-1"><span class="text-ink-2">{e.who}</span> {eventSummary(e)}</span>
-            {#if e.date}<span class="tnum shrink-0 text-[12px]" title={dateTime(e.date)}>{ago(e.date)}</span>{/if}
+            {#if e.date}<span class="tabular-nums shrink-0 text-[12px]" title={dateTime(e.date)}>{ago(e.date)}</span>{/if}
           </li>
         {/each}
       {/if}

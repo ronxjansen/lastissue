@@ -10,12 +10,12 @@
 //! into a [`ListQuery`] with [`ListQuery::apply`], so the token parser, the
 //! CLI flags and the GUI share one evaluation path.
 
-use crate::error::{Error, Result};
+use crate::error::{EXIT_NOT_FOUND, Error, Result};
 use crate::identity::Identity;
 use crate::model::{self, Priority, State, labels_of, list_of, priority_of, state_of};
 use crate::search::{Matches, Terms};
 use crate::store::mbox::{self, Msg};
-use crate::store::{IssueRef, Project, Store};
+use crate::store::{self, IssueRef, Project, Store};
 use chrono::{DateTime, FixedOffset};
 use rayon::prelude::*;
 use std::borrow::Cow;
@@ -23,7 +23,9 @@ use std::cmp::Reverse;
 use std::collections::HashMap;
 
 mod memory;
-pub use memory::{Blockers, Group, GroupKey, Grouping, group, instant_match, sort_summaries};
+pub use memory::{
+    Blockers, Group, GroupKey, Grouping, Tier, group, instant_match, sort_summaries, term_tier,
+};
 
 /// Sort orders other than path order.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -95,12 +97,6 @@ pub struct Stats {
     pub updated: Option<DateTime<FixedOffset>>,
 }
 
-impl From<(usize, Option<DateTime<FixedOffset>>)> for Stats {
-    fn from((comments, updated): (usize, Option<DateTime<FixedOffset>>)) -> Self {
-        Stats { comments, updated }
-    }
-}
-
 /// One listed issue.
 #[derive(Debug, Clone)]
 pub struct Row {
@@ -109,53 +105,6 @@ pub struct Row {
     /// Where `search` matched.
     pub matches: Option<Matches>,
     pub stats: Option<Stats>,
-}
-
-impl SortKeys for Row {
-    fn state(&self) -> State {
-        state_of(&self.head)
-    }
-    fn priority(&self) -> Option<Priority> {
-        priority_of(&self.head)
-    }
-    fn created(&self) -> i64 {
-        self.head.date().map_or(0, |d| d.timestamp())
-    }
-    fn updated(&self) -> i64 {
-        self.stats
-            .and_then(|s| s.updated)
-            .map_or_else(|| self.created(), |d| d.timestamp())
-    }
-    fn due(&self) -> Option<i64> {
-        HeadFields::due(&self.head)
-    }
-}
-
-/// What the sort orders compare.
-pub(crate) trait SortKeys {
-    fn state(&self) -> State;
-    fn priority(&self) -> Option<Priority>;
-    fn created(&self) -> i64;
-    fn updated(&self) -> i64;
-    fn due(&self) -> Option<i64>;
-}
-
-impl<T: SortKeys> SortKeys for &T {
-    fn state(&self) -> State {
-        (**self).state()
-    }
-    fn priority(&self) -> Option<Priority> {
-        (**self).priority()
-    }
-    fn created(&self) -> i64 {
-        (**self).created()
-    }
-    fn updated(&self) -> i64 {
-        (**self).updated()
-    }
-    fn due(&self) -> Option<i64> {
-        (**self).due()
-    }
 }
 
 /// A page of results.
@@ -190,14 +139,10 @@ pub struct Filter {
     pub expired: bool,
     pub terms: Option<Terms>,
     /// The raw free-text terms, lowercased (the in-memory instant tier,
-    /// [`Filter::matches_summary`]).
+    /// [`instant_match`]).
     pub text: Vec<String>,
     /// Unix time `expired` compares against.
     pub now: i64,
-}
-
-fn contains_ci(hay: &str, needle: &str) -> bool {
-    contains_lower(hay, &lower(needle))
 }
 
 /// `s` lowercased, without allocating when it already is.
@@ -211,8 +156,7 @@ pub fn lower(s: &str) -> std::borrow::Cow<'_, str> {
 
 /// Case-insensitive substring test for an already-lowercase `needle`.
 /// ASCII text (the common case) is compared in place; anything else falls
-/// back to `to_lowercase` (M6: the allocation per field per issue was the
-/// instant tier's hot spot).
+/// back to `to_lowercase`.
 pub fn contains_lower(hay: &str, needle: &str) -> bool {
     if needle.is_empty() {
         return true;
@@ -243,10 +187,7 @@ impl Filter {
         let parent = q
             .parent
             .as_deref()
-            .map(|p| -> Result<String> {
-                let r = store.resolve_issue(p)?;
-                Ok(store.read_head(&r)?.message_id().to_string())
-            })
+            .map(|p| crate::ops::issue_message_id(store, p))
             .transpose()?;
         let pattern = |w: &Option<String>| w.as_deref().map(|w| me.who_pattern(w)).transpose();
         let assignee = pattern(&q.assignee)?;
@@ -278,21 +219,24 @@ impl Filter {
         })
     }
 
-    /// The issue is in scope (project / no project).
-    pub fn in_scope(&self, r: &IssueRef) -> bool {
+    /// An issue in the project with this ID (`None`: outside any) is in
+    /// scope.
+    fn in_scope(&self, project: Option<&str>) -> bool {
         match (&self.project, self.no_project) {
-            (Some(p), _) => r.project.as_ref().is_some_and(|rp| rp.id == p.id),
-            (None, true) => r.project.is_none(),
+            (Some(p), _) => project == Some(p.id.as_str()),
+            (None, true) => project.is_none(),
             _ => true,
         }
     }
 
-    /// Every header criterion except `ready`'s blocker check (which needs
-    /// other issues) and the full-text terms.
-    pub fn matches_head(&self, head: &Msg) -> bool {
-        self.matches_fields(head)
+    /// `is:ready` / `is:blocked`, given whether the issue has an open
+    /// blocker.
+    fn passes_blocked(&self, blocked: bool) -> bool {
+        (!self.ready || !blocked) && (!self.blocked || blocked)
     }
 
+    /// Every header criterion except `ready`'s blocker check (which needs
+    /// other issues) and the full-text terms.
     pub(crate) fn matches_fields<H: HeadFields>(&self, head: &H) -> bool {
         let st = head.state();
         if !self.states.is_empty() {
@@ -323,17 +267,17 @@ impl Filter {
             }
         }
         if let Some(w) = &self.assignee
-            && !head.assignee().is_some_and(|v| contains_ci(v, w))
+            && !head.assignee().is_some_and(|v| contains_lower(v, w))
         {
             return false;
         }
         if let Some(w) = &self.author
-            && !head.author().is_some_and(|v| contains_ci(v, w))
+            && !head.author().is_some_and(|v| contains_lower(v, w))
         {
             return false;
         }
         if let Some(w) = &self.watching
-            && !head.watchers().iter().any(|v| contains_ci(v, w))
+            && !head.watchers().iter().any(|v| contains_lower(v, w))
         {
             return false;
         }
@@ -357,6 +301,8 @@ impl Filter {
 pub(crate) trait HeadFields {
     fn state(&self) -> State;
     fn priority(&self) -> Option<Priority>;
+    /// Unix time of `Date` (0 without one).
+    fn created(&self) -> i64;
     /// Unix time of `Reply-By`.
     fn due(&self) -> Option<i64>;
     /// Unix time of `Expires`.
@@ -381,6 +327,9 @@ impl HeadFields for Msg {
     }
     fn priority(&self) -> Option<Priority> {
         priority_of(self)
+    }
+    fn created(&self) -> i64 {
+        self.date().map_or(0, |d| d.timestamp())
     }
     fn due(&self) -> Option<i64> {
         ts(self, "Reply-By")
@@ -412,16 +361,9 @@ impl HeadFields for Msg {
 /// slug (exact, or a unique prefix), so `project:auth` works.
 fn resolve_project(store: &Store, q: &str) -> Result<Project> {
     match store.resolve_project(q) {
-        Err(e) if e.code == 2 => {
+        Err(e) if e.code == EXIT_NOT_FOUND => {
             let want = q.trim().to_lowercase();
-            let mut hits: Vec<Project> = store
-                .projects()?
-                .into_iter()
-                .filter(|p| p.slug.starts_with(&want))
-                .collect();
-            if let Some(i) = hits.iter().position(|p| p.slug == want) {
-                return Ok(hits.swap_remove(i));
-            }
+            let mut hits = store::matching(store.projects()?, |p| p.slug.as_str(), &want);
             match hits.len() {
                 0 => Err(e),
                 1 => Ok(hits.remove(0)),
@@ -460,7 +402,7 @@ pub enum Token {
 }
 
 /// What a token's value may be, for error messages.
-pub const VALID_KEYS: &str = "state:S, p:P (priority:P), label:L, @WHO, assignee:WHO, project:P, \
+const VALID_KEYS: &str = "state:S, p:P (priority:P), label:L, @WHO, assignee:WHO, project:P, \
 is:ready, is:blocked, due:<DATE, due:>DATE";
 
 /// Split on whitespace outside double quotes; quotes group and are removed
@@ -622,7 +564,10 @@ pub fn list(store: &Store, me: &Identity, q: &ListQuery) -> Result<Page> {
     let sort_updated = q.sort == Some(Sort::Updated);
     let issues = store.issues()?;
     let by_id: HashMap<&str, &IssueRef> = issues.iter().map(|r| (r.id.as_str(), r)).collect();
-    let scoped: Vec<&IssueRef> = issues.iter().filter(|r| f.in_scope(r)).collect();
+    let scoped: Vec<&IssueRef> = issues
+        .iter()
+        .filter(|r| f.in_scope(r.project.as_ref().map(|p| p.id.as_str())))
+        .collect();
 
     // One file → a row if it passes every filter. Runs on the thread pool.
     let eval = |r: &IssueRef| -> Result<Option<Row>> {
@@ -640,16 +585,21 @@ pub fn list(store: &Store, me: &Identity, q: &ListQuery) -> Result<Page> {
             Some(b) => mbox::read_head(&b[..])?,
             None => store.read_head(r)?,
         };
-        if !f.matches_head(&head) {
+        if !f.matches_fields(&head) {
             return Ok(None);
         }
         if f.ready || f.blocked {
-            let blocked = list_of(&head, "X-Blocked-By").iter().any(|b| {
-                store
-                    .state_by_message_id(b, &by_id)
+            let mut blocked = false;
+            for b in list_of(&head, "X-Blocked-By") {
+                if store
+                    .state_by_message_id(&b, &by_id)?
                     .is_some_and(State::is_open)
-            });
-            if (f.ready && blocked) || (f.blocked && !blocked) {
+                {
+                    blocked = true;
+                    break;
+                }
+            }
+            if !f.passes_blocked(blocked) {
                 return Ok(None);
             }
         }
@@ -667,8 +617,8 @@ pub fn list(store: &Store, me: &Identity, q: &ListQuery) -> Result<Page> {
             _ => None,
         };
         let stats = match (&raw, sort_updated) {
-            (Some(b), true) => Some(mbox::scan_stats(&b[..])?.into()),
-            (None, true) => Some(store.stats(r)?.into()),
+            (Some(b), true) => Some(mbox::scan_stats(&b[..])?),
+            (None, true) => Some(store.stats(r)?),
             _ => None,
         };
         Ok(Some(Row {
@@ -696,7 +646,12 @@ pub fn list(store: &Store, me: &Identity, q: &ListQuery) -> Result<Page> {
         batch = (batch * 2).min(MAX_BATCH);
     }
 
-    sort_rows(&mut rows, q.sort);
+    if let Some(sort) = q.sort {
+        rows.sort_by_cached_key(|r| {
+            let updated = r.stats.and_then(|s| s.updated).map(|d| d.timestamp());
+            sort_key(sort, &r.head, updated)
+        });
+    }
 
     let more = q.limit > 0 && rows.len() > q.offset + q.limit;
     let take = if q.limit == 0 { usize::MAX } else { q.limit };
@@ -706,7 +661,7 @@ pub fn list(store: &Store, me: &Identity, q: &ListQuery) -> Result<Page> {
         rows.par_iter_mut()
             .filter(|row| row.stats.is_none())
             .map(|row| -> Result<()> {
-                row.stats = Some(store.stats(&row.issue)?.into());
+                row.stats = Some(store.stats(&row.issue)?);
                 Ok(())
             })
             .collect::<Result<()>>()?;
@@ -717,23 +672,26 @@ pub fn list(store: &Store, me: &Identity, q: &ListQuery) -> Result<Page> {
     })
 }
 
-fn sort_rows<T: SortKeys>(rows: &mut [T], sort: Option<Sort>) {
-    let state_key = |r: &T| {
-        (
-            r.state().sort_rank(),
-            Priority::rank(r.priority()),
-            Reverse(r.created()),
-        )
-    };
+/// What `sort` orders by: (undated, due, state rank, priority rank,
+/// newest), with the parts it ignores held constant. `updated` falls back
+/// to the creation date.
+fn sort_key(
+    sort: Sort,
+    h: &impl HeadFields,
+    updated: Option<i64>,
+) -> (bool, Option<i64>, u8, u8, Reverse<i64>) {
+    let created = h.created();
+    let state = h.state().sort_rank();
+    let prio = Priority::rank(h.priority());
     match sort {
-        None => {}
-        Some(Sort::State) => rows.sort_by_key(state_key),
-        Some(Sort::Created) => rows.sort_by_key(|r| Reverse(r.created())),
-        Some(Sort::Updated) => rows.sort_by_key(|r| Reverse(r.updated())),
-        Some(Sort::Priority) => {
-            rows.sort_by_key(|r| (Priority::rank(r.priority()), Reverse(r.created())));
+        Sort::State => (false, None, state, prio, Reverse(created)),
+        Sort::Created => (false, None, 0, 0, Reverse(created)),
+        Sort::Updated => (false, None, 0, 0, Reverse(updated.unwrap_or(created))),
+        Sort::Priority => (false, None, 0, prio, Reverse(created)),
+        Sort::Due => {
+            let due = h.due();
+            (due.is_none(), due, state, prio, Reverse(created))
         }
-        Some(Sort::Due) => rows.sort_by_key(|r| (r.due().is_none(), r.due(), state_key(r))),
     }
 }
 
@@ -780,7 +738,6 @@ mod tests {
         fn contains_lower_agrees_with_to_lowercase(hay in "[a-zA-Z0-9 _éÉİK-]{0,12}", needle in "[a-zA-Z0-9 éÉİ]{0,3}") {
             let n = needle.to_lowercase();
             proptest::prop_assert_eq!(contains_lower(&hay, &n), hay.to_lowercase().contains(&n));
-            proptest::prop_assert_eq!(contains_ci(&hay, &needle), hay.to_lowercase().contains(&n));
         }
     }
 

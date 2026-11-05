@@ -61,7 +61,7 @@ export const ACTIONS = {
 
 export type Action = keyof typeof ACTIONS;
 
-export function isAction(a: string): a is Action {
+function isAction(a: string): a is Action {
   return Object.hasOwn(ACTIONS, a);
 }
 
@@ -78,7 +78,7 @@ const issueKeys: Record<string, Action> = {
   "cmd-shift-c": "copyIssueLink",
 };
 
-export const DEFAULT_KEYMAP: Record<Context, Record<string, Action>> = {
+const DEFAULT_KEYMAP: Record<Context, Record<string, Action>> = {
   global: {
     "cmd-k": "openPalette",
     "cmd-,": "openSettings",
@@ -131,21 +131,26 @@ export const DEFAULT_KEYMAP: Record<Context, Record<string, Action>> = {
 export type Keymap = Record<string, Record<string, Action>>;
 
 /** Defaults with user overrides on top. Returns problems (unknown
- *  contexts or actions) alongside. */
+ *  contexts or actions, bad entries) alongside; `//` keys are comments. */
 export function merge(user: Bindings): { keymap: Keymap; errors: string[] } {
   const keymap: Keymap = {};
   for (const [ctx, binds] of Object.entries(DEFAULT_KEYMAP)) keymap[ctx] = { ...binds };
   const errors: string[] = [];
   for (const [ctx, binds] of Object.entries(user)) {
+    if (ctx.startsWith("//")) continue;
     if (!(ctx in keymap)) {
       errors.push(`unknown context "${ctx}"`);
+      continue;
+    }
+    if (typeof binds !== "object" || binds === null || Array.isArray(binds)) {
+      errors.push(`${ctx}: expected an object of key → action`);
       continue;
     }
     for (const [keys, action] of Object.entries(binds)) {
       const k = normalizeKeys(keys);
       if (action === null) delete keymap[ctx][k];
-      else if (isAction(action)) keymap[ctx][k] = action;
-      else errors.push(`${ctx} / ${keys}: unknown action "${action}"`);
+      else if (typeof action === "string" && isAction(action)) keymap[ctx][k] = action;
+      else errors.push(`${ctx} / ${keys}: unknown action ${JSON.stringify(action)}`);
     }
   }
   return { keymap, errors };

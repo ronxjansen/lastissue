@@ -7,7 +7,7 @@ use cli::{Cli, Cmd, RepoCmd, common::Ctx};
 use error::{Error, Result};
 use lastissue::{error, linear, model, registry, store};
 use std::io::Write;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 fn main() {
     let code = match Cli::try_parse() {
@@ -18,7 +18,7 @@ fn main() {
                 0
             }
             Err(e) => {
-                format::print_error(&e);
+                eprint!("{e}");
                 e.code
             }
         },
@@ -27,15 +27,11 @@ fn main() {
             | ErrorKind::DisplayVersion
             | ErrorKind::DisplayHelpOnMissingArgumentOrSubcommand => {
                 let _ = e.print();
-                if e.kind() == ErrorKind::DisplayHelpOnMissingArgumentOrSubcommand {
-                    error::EXIT_USAGE
-                } else {
-                    0
-                }
+                if e.use_stderr() { error::EXIT_USAGE } else { 0 }
             }
             _ => {
                 let err = clap_error(&e);
-                format::print_error(&err);
+                eprint!("{err}");
                 err.code
             }
         },
@@ -45,11 +41,11 @@ fn main() {
 
 /// Explicit root (§2.1): `--root` | `--repo` (clap rejects both), then
 /// `LASTISSUE_DIR`. None means walk up, then the global root.
-fn explicit_root(cli: &Cli) -> Result<Option<PathBuf>> {
-    if let Some(r) = &cli.root {
-        return Ok(Some(r.clone()));
+fn explicit_root(root: Option<&Path>, repo: Option<&str>) -> Result<Option<PathBuf>> {
+    if let Some(r) = root {
+        return Ok(Some(r.to_path_buf()));
     }
-    if let Some(label) = &cli.repo {
+    if let Some(label) = repo {
         return Ok(Some(registry::resolve(label)?.root));
     }
     Ok(std::env::var_os("LASTISSUE_DIR")
@@ -66,52 +62,63 @@ fn repo_blocks<'a>(repos: impl IntoIterator<Item = &'a registry::Repo>) -> Strin
 }
 
 fn run(cli: Cli) -> Result<String> {
-    match &cli.cmd {
+    let Cli {
+        root,
+        repo,
+        from,
+        sender,
+        cmd,
+    } = cli;
+    let explicit = || explicit_root(root.as_deref(), repo.as_deref());
+    match cmd {
         Cmd::Init {
             global,
             no_register,
         } => {
-            let dir = if *global {
+            let dir = if global {
                 store::global_root()?
             } else {
-                match explicit_root(&cli)? {
+                match explicit()? {
                     Some(r) => r,
                     None => store::default_local_root(&std::env::current_dir()?),
                 }
             };
             let root = store::init(&dir)?;
             let mut fields = vec![("X-Root".to_string(), root.display().to_string())];
-            if !*global && !*no_register {
+            if !global && !no_register {
                 let repo = registry::add(&root)
                     .map_err(|e| e.with("Hint", "lastissue init --no-register"))?;
                 fields.push(("X-Repo".into(), repo.label));
             }
-            return Ok(format::block(&fields));
+            Ok(format::block(&fields))
         }
-        Cmd::Repo(c) => {
-            return Ok(match c {
-                RepoCmd::List => repo_blocks(&registry::load()?),
-                RepoCmd::Add { path } => {
-                    let p = match path {
-                        Some(p) => p.clone(),
-                        None => std::env::current_dir()?,
-                    };
-                    repo_blocks([&registry::add(&p)?])
-                }
-                RepoCmd::Remove { repo } => repo_blocks([&registry::remove(repo)?]),
-            });
-        }
-        _ => {}
+        Cmd::Repo(c) => Ok(match c {
+            RepoCmd::List => repo_blocks(&registry::load()?),
+            RepoCmd::Add { path } => {
+                let p = match path {
+                    Some(p) => p,
+                    None => std::env::current_dir()?,
+                };
+                repo_blocks([&registry::add(&p)?])
+            }
+            RepoCmd::Remove { repo } => repo_blocks([&registry::remove(&repo)?]),
+        }),
+        Cmd::Project(c) => in_store(explicit()?, from, sender, |ctx| cli::project::run(ctx, c)),
+        Cmd::Issue(c) => in_store(explicit()?, from, sender, |ctx| cli::issue::run(ctx, c)),
+        Cmd::Comment(c) => in_store(explicit()?, from, sender, |ctx| cli::comment::run(ctx, c)),
+        Cmd::Import(c) => in_store(explicit()?, from, sender, |ctx| cli::import::run(ctx, c)),
     }
-    let root = store::discover(explicit_root(&cli)?.as_deref())?;
-    let mut ctx = Ctx::new(root, cli.from, cli.sender);
-    let res = match cli.cmd {
-        Cmd::Init { .. } | Cmd::Repo(_) => unreachable!(),
-        Cmd::Project(c) => cli::project::run(&mut ctx, c),
-        Cmd::Issue(c) => cli::issue::run(&mut ctx, c),
-        Cmd::Comment(c) => cli::comment::run(&mut ctx, c),
-        Cmd::Import(c) => cli::import::run(&mut ctx, c),
-    };
+}
+
+/// Run a command against the discovered store and return its output.
+fn in_store(
+    root: Option<PathBuf>,
+    from: Option<String>,
+    sender: Option<String>,
+    f: impl FnOnce(&mut Ctx) -> Result<()>,
+) -> Result<String> {
+    let mut ctx = Ctx::new(store::discover(root.as_deref())?, from, sender);
+    let res = f(&mut ctx);
     // Core resolves identity lazily and never prints: warn here if the
     // command fell back to $USER@host.
     ctx.warn_identity();
@@ -130,21 +137,19 @@ fn clap_error(e: &clap::Error) -> Error {
         && let Some(ContextValue::Strings(valid)) = e.get(ContextKind::ValidValue)
     {
         let arg = ctx_str(ContextKind::InvalidArg).unwrap_or_default();
+        // `--state <S>` → state; a positional (`[-]`) → value.
         let name = arg
             .trim_start_matches('-')
-            .split([' ', '=', '<'])
+            .split([' ', '=', '<', '['])
             .next()
-            .unwrap_or("value")
-            .to_string();
-        return Error::validation(&format!(
-            "invalid-{}",
-            if name.is_empty() { "value" } else { &name }
-        ))
-        .with(
-            "Value",
-            ctx_str(ContextKind::InvalidValue).unwrap_or_default(),
-        )
-        .with("Valid", valid.join(", "));
+            .filter(|n| !n.is_empty())
+            .unwrap_or("value");
+        return Error::validation(&format!("invalid-{name}"))
+            .with(
+                "Value",
+                ctx_str(ContextKind::InvalidValue).unwrap_or_default(),
+            )
+            .with("Valid", valid.join(", "));
     }
     let rendered = e.render().to_string();
     let mut err = Error::usage("usage");

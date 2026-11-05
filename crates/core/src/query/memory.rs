@@ -3,7 +3,7 @@
 //! a front-end resolves a [`Filter`] once and re-evaluates it on every
 //! keystroke or watcher change.
 
-use super::{Filter, HeadFields, Sort, SortKeys, contains_lower, lower, sort_rows};
+use super::{Filter, HeadFields, Sort, contains_lower, lower, sort_key};
 use crate::model::{Priority, State};
 use crate::source::IssueSummary;
 use std::borrow::Cow;
@@ -15,6 +15,9 @@ impl HeadFields for IssueSummary {
     }
     fn priority(&self) -> Option<Priority> {
         self.priority
+    }
+    fn created(&self) -> i64 {
+        self.created.map_or(0, |d| d.timestamp())
     }
     fn due(&self) -> Option<i64> {
         self.due.map(|d| d.timestamp())
@@ -42,32 +45,13 @@ impl HeadFields for IssueSummary {
     }
 }
 
-impl SortKeys for IssueSummary {
-    fn state(&self) -> State {
-        self.state
-    }
-    fn priority(&self) -> Option<Priority> {
-        self.priority
-    }
-    fn created(&self) -> i64 {
-        self.created.map_or(0, |d| d.timestamp())
-    }
-    fn updated(&self) -> i64 {
-        self.updated
-            .map_or_else(|| SortKeys::created(self), |d| d.timestamp())
-    }
-    fn due(&self) -> Option<i64> {
-        HeadFields::due(self)
-    }
-}
-
 /// Message-ID → state of every loaded issue, for `is:ready` /
 /// `is:blocked` without touching the disk.
 #[derive(Debug, Default)]
 pub struct Blockers<'a>(HashMap<&'a str, State>);
 
 impl<'a> Blockers<'a> {
-    pub fn new(all: impl IntoIterator<Item = &'a IssueSummary>) -> Self {
+    fn new(all: impl IntoIterator<Item = &'a IssueSummary>) -> Self {
         Blockers(
             all.into_iter()
                 .map(|s| (s.message_id.as_str(), s.state))
@@ -76,7 +60,7 @@ impl<'a> Blockers<'a> {
     }
 
     /// At least one blocker exists and is open (SPEC §6.4).
-    pub fn is_blocked(&self, s: &IssueSummary) -> bool {
+    fn is_blocked(&self, s: &IssueSummary) -> bool {
         s.blocked_by
             .iter()
             .any(|b| self.0.get(b.as_str()).is_some_and(|st| st.is_open()))
@@ -95,58 +79,62 @@ impl Filter {
         }
     }
 
-    /// [`Filter::in_scope`] for a summary.
-    pub fn in_scope_summary(&self, s: &IssueSummary) -> bool {
-        match (&self.project, self.no_project) {
-            (Some(p), _) => s.project.as_deref() == Some(p.id.as_str()),
-            (None, true) => s.project.is_none(),
-            _ => true,
-        }
-    }
-
-    /// Everything [`super::list`] checks, in memory. Free text is the
-    /// instant tier ([`instant_match`]), not a body/comment search.
-    pub fn matches_summary(&self, s: &IssueSummary, blockers: &Blockers) -> bool {
-        self.matches_summary_fields(s, blockers) && instant_match(s, &self.text)
-    }
-
-    /// [`Filter::matches_summary`] without the free text: scope, header
-    /// fields and `is:ready` / `is:blocked`. A front-end that also runs
-    /// the full-text tier (GUI-SPEC §6) checks the text itself.
+    /// Everything [`super::list`] checks, in memory, except the free text:
+    /// scope, header fields and `is:ready` / `is:blocked`. The caller
+    /// checks the text ([`instant_match`], or the full-text tier,
+    /// GUI-SPEC §6).
     pub fn matches_summary_fields(&self, s: &IssueSummary, blockers: &Blockers) -> bool {
-        if !self.in_scope_summary(s) || !self.matches_fields(s) {
-            return false;
-        }
-        if self.ready || self.blocked {
-            let blocked = blockers.is_blocked(s);
-            if (self.ready && blocked) || (self.blocked && !blocked) {
-                return false;
-            }
-        }
-        true
+        self.in_scope(s.project.as_deref())
+            && self.matches_fields(s)
+            && self.passes_blocked(blockers.is_blocked(s))
     }
+}
+
+/// Where a search term matched, best first (GUI-SPEC §6).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub enum Tier {
+    Title,
+    /// Short ID, a label, the assignee or the project.
+    Field,
+    Body,
+    Comment,
+}
+
+impl Tier {
+    pub fn label(self) -> &'static str {
+        match self {
+            Tier::Title => "title",
+            Tier::Field => "label/ID",
+            Tier::Body => "body",
+            Tier::Comment => "comment",
+        }
+    }
+}
+
+/// The best instant tier (title or field) for one lowercased term.
+pub fn term_tier(s: &IssueSummary, t: &str) -> Option<Tier> {
+    if contains_lower(&s.title, t) {
+        return Some(Tier::Title);
+    }
+    let field = s.id.starts_with(t)
+        || s.labels.iter().any(|l| contains_lower(l, t))
+        || s.assignee.as_deref().is_some_and(|a| contains_lower(a, t))
+        || s.project_slug
+            .as_deref()
+            .is_some_and(|p| contains_lower(p, t))
+        || s.project.as_deref().is_some_and(|p| p.starts_with(t));
+    field.then_some(Tier::Field)
 }
 
 /// Every term occurs (case-insensitively) in the title, short ID, a
 /// label, the assignee or the project (GUI-SPEC §6, tier 1).
 pub fn instant_match(s: &IssueSummary, terms: &[String]) -> bool {
-    terms.iter().all(|t| {
-        let t = lower(t);
-        let t = t.as_ref();
-        contains_lower(&s.title, t)
-            || s.id.starts_with(t)
-            || s.labels.iter().any(|l| contains_lower(l, t))
-            || s.assignee.as_deref().is_some_and(|a| contains_lower(a, t))
-            || s.project_slug
-                .as_deref()
-                .is_some_and(|p| contains_lower(p, t))
-            || s.project.as_deref().is_some_and(|p| p.starts_with(t))
-    })
+    terms.iter().all(|t| term_tier(s, &lower(t)).is_some())
 }
 
 /// Sort summaries like `issue list --sort` sorts rows.
 pub fn sort_summaries(items: &mut [&IssueSummary], sort: Sort) {
-    sort_rows(items, Some(sort));
+    items.sort_by_cached_key(|s| sort_key(sort, *s, s.updated.map(|d| d.timestamp())));
 }
 
 /// What the list and board group by (GUI-SPEC §5).
@@ -235,7 +223,7 @@ mod tests {
     use crate::model::Actor;
     use crate::ops::{self, IssueUpdate, NewIssue};
     use crate::query::{ListQuery, list};
-    use crate::source::{FsScan, IssueSource};
+    use crate::source;
     use crate::store::{self, Store};
 
     struct Fx {
@@ -266,7 +254,11 @@ mod tests {
     }
 
     fn summaries(f: &Fx) -> Vec<IssueSummary> {
-        FsScan::new(f.s.clone()).scan().unwrap()
+        f.s.issues()
+            .unwrap()
+            .iter()
+            .map(|r| source::load(&f.s, r).unwrap())
+            .collect()
     }
 
     /// In-memory evaluation agrees with the disk-based `list` (as sets:
@@ -289,7 +281,7 @@ mod tests {
         let blockers = Blockers::new(&all);
         let mut mem: Vec<&IssueSummary> = all
             .iter()
-            .filter(|s| flt.matches_summary(s, &blockers))
+            .filter(|s| flt.matches_summary_fields(s, &blockers) && instant_match(s, &flt.text))
             .collect();
         sort_summaries(&mut mem, Sort::Created);
         let mut mem: Vec<String> = mem.into_iter().map(|s| s.id.clone()).collect();

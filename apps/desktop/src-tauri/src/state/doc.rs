@@ -69,7 +69,7 @@ impl Doc {
                     }
                 }
                 Some(f) => {
-                    if let DiskChange::Adopt(_) = f.disk(&disk) {
+                    if f.disk(&disk) == DiskChange::Adopt {
                         self.reset += 1;
                     }
                 }
@@ -118,17 +118,22 @@ impl Doc {
         dirty
     }
 
-    /// What a save writes now, after mirroring the body draft to the
-    /// crash guard. Nothing while a conflict is open.
-    pub fn to_save(&self, drafts: Option<&Drafts>) -> Vec<(FieldKind, String)> {
+    /// Mirror the body draft to the crash guard (or clear it).
+    pub fn mirror(&self, drafts: Option<&Drafts>) {
         if let (Some(d), Some(mid), Some(b)) = (drafts, self.message_id(), &self.body) {
             match &b.draft {
                 Some(text) => {
-                    let _ = d.save(&mid, text);
+                    if let Err(e) = d.save(&mid, text) {
+                        eprintln!("lastissue-gui: cannot keep the draft of {}: {e}", self.id);
+                    }
                 }
                 None => d.clear(&mid),
             }
         }
+    }
+
+    /// What a save writes now. Nothing while a conflict is open.
+    pub fn to_save(&self) -> Vec<(FieldKind, String)> {
         [FieldKind::Title, FieldKind::Body]
             .into_iter()
             .filter_map(|k| Some((k, self.field(k)?.to_save()?)))
@@ -196,7 +201,8 @@ mod tests {
 
     fn msgs(title: &str, body: &str) -> Vec<Msg> {
         let mut m = Msg::default();
-        m.headers.push(("Message-ID".into(), "<01JTEST@lastissue>".into()));
+        m.headers
+            .push(("Message-ID".into(), "<01JTEST@lastissue>".into()));
         m.headers.push(("Subject".into(), title.into()));
         m.body = mbox::normalize_body(body);
         vec![m]
@@ -212,7 +218,8 @@ mod tests {
         assert!(!d.is_dirty());
 
         assert!(d.edit(FieldKind::Body, "two\n", Some(&drafts)));
-        let save = d.to_save(Some(&drafts));
+        d.mirror(Some(&drafts));
+        let save = d.to_save();
         assert_eq!(save, [(FieldKind::Body, "two\n".to_string())]);
         // Mirrored to the crash guard until saved.
         assert_eq!(drafts.load("<01JTEST@lastissue>").as_deref(), Some("two\n"));
@@ -227,7 +234,7 @@ mod tests {
         d.edit(FieldKind::Body, "mine\n", Some(&drafts));
         d.loaded(msgs("T", "theirs\n"), Some(&drafts));
         assert!(d.body.as_ref().unwrap().conflict.is_some());
-        assert!(d.to_save(Some(&drafts)).is_empty());
+        assert!(d.to_save().is_empty());
         d.use_theirs(Some(&drafts));
         assert_eq!(d.body.as_ref().unwrap().value(), "theirs");
         assert!(!d.is_dirty());

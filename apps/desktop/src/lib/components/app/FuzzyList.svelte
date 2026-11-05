@@ -21,7 +21,7 @@
     rows: T[];
     placeholder: string;
     empty?: string;
-    row: Snippet<[T, boolean]>;
+    row: Snippet<[T]>;
     header?: Snippet;
     footer?: Snippet;
     onpick: (item: T, index: number, e: KeyboardEvent | MouseEvent) => void;
@@ -29,21 +29,16 @@
     width?: string;
   } = $props();
 
-  let highlight = $state(0);
-  let list: HTMLDivElement | undefined = $state();
-  let input: HTMLInputElement | undefined = $state();
-
-  $effect(() => {
-    // New rows (typing): back to the top.
+  // New rows (typing): back to the top.
+  let highlight = $derived.by(() => {
     void rows;
-    highlight = 0;
+    return 0;
   });
+  let list: HTMLDivElement | undefined = $state();
 
   $effect(() => {
     list?.querySelector(`[data-row="${highlight}"]`)?.scrollIntoView({ block: "nearest" });
   });
-
-  $effect(() => input?.focus());
 
   function keydown(e: KeyboardEvent) {
     if (e.key === "ArrowDown" || (e.key === "n" && e.ctrlKey)) {
@@ -65,13 +60,14 @@
 </script>
 
 <div class="{width} max-w-[calc(100vw-2rem)] overflow-hidden rounded-xl border border-rule bg-popover text-popover-foreground shadow-pop">
+  <!-- svelte-ignore a11y_autofocus -->
   <input
-    bind:this={input}
     bind:value={query}
     onkeydown={keydown}
     {placeholder}
     spellcheck="false"
     autocomplete="off"
+    autofocus
     class="h-12 w-full border-b border-rule bg-transparent px-4 text-[15px] outline-none placeholder:text-ink-3"
   />
   {#if header}{@render header()}{/if}
@@ -87,7 +83,7 @@
         onmousemove={() => (highlight = i)}
         onclick={(e) => onpick(item, i, e)}
       >
-        {@render row(item, i === highlight)}
+        {@render row(item)}
       </div>
     {:else}
       <div class="px-3 py-3 text-[14px] text-ink-3">{empty}</div>

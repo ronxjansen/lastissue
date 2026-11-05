@@ -8,14 +8,42 @@ use ulid::Ulid;
 
 // ---------------------------------------------------------------- State
 
+/// With the `clap` feature, variant order and aliases define the CLI's
+/// `--help` and `Valid:` list; aliases must agree with [`State::parse`].
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "clap", derive(clap::ValueEnum))]
 pub enum State {
     Backlog,
     Todo,
+    #[cfg_attr(
+        feature = "clap",
+        value(
+            alias = "in progress",
+            alias = "in_progress",
+            alias = "inprogress",
+            alias = "doing",
+            alias = "wip"
+        )
+    )]
     InProgress,
+    #[cfg_attr(
+        feature = "clap",
+        value(
+            alias = "in review",
+            alias = "in_review",
+            alias = "inreview",
+            alias = "review"
+        )
+    )]
     InReview,
+    #[cfg_attr(
+        feature = "clap",
+        value(alias = "complete", alias = "completed", alias = "closed")
+    )]
     Done,
+    #[cfg_attr(feature = "clap", value(alias = "canceled"))]
     Cancelled,
+    #[cfg_attr(feature = "clap", value(alias = "duplicated", alias = "dup"))]
     Duplicate,
 }
 
@@ -86,10 +114,24 @@ impl State {
 // ---------------------------------------------------------------- Priority
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[cfg_attr(feature = "clap", derive(clap::ValueEnum))]
 pub enum Priority {
+    #[cfg_attr(
+        feature = "clap",
+        value(alias = "p0", alias = "u", alias = "critical", alias = "crit")
+    )]
     Urgent,
+    #[cfg_attr(feature = "clap", value(alias = "p1", alias = "h", alias = "hi"))]
     High,
+    #[cfg_attr(
+        feature = "clap",
+        value(alias = "p2", alias = "m", alias = "med", alias = "normal")
+    )]
     Medium,
+    #[cfg_attr(
+        feature = "clap",
+        value(alias = "p3", alias = "l", alias = "lo", alias = "minor")
+    )]
     Low,
 }
 
@@ -164,14 +206,6 @@ pub fn split_list(s: &str) -> Vec<String> {
     out
 }
 
-pub fn join_list(items: &[String]) -> Option<String> {
-    if items.is_empty() {
-        None
-    } else {
-        Some(items.join(", "))
-    }
-}
-
 // ---------------------------------------------------------------- Addresses
 
 /// Lowercased email part of `Name <email>` or `email`.
@@ -197,7 +231,7 @@ pub fn validate_address(addr: &str) -> Result<String> {
 
 // ---------------------------------------------------------------- IDs
 
-pub const CROCKFORD: &str = "0123456789abcdefghjkmnpqrstvwxyz";
+const CROCKFORD: &str = "0123456789abcdefghjkmnpqrstvwxyz";
 
 pub fn new_ulid() -> Ulid {
     Ulid::generate()
@@ -230,8 +264,8 @@ pub fn now() -> DateTime<Local> {
     Local::now()
 }
 
-pub fn date_header(d: DateTime<Local>) -> String {
-    d.to_rfc2822()
+pub fn now_header() -> String {
+    now().to_rfc2822()
 }
 
 /// Identity of whoever runs the command.
@@ -244,7 +278,7 @@ pub struct Actor {
 pub fn base_message(actor: &Actor, subject: &str) -> Msg {
     let mut m = Msg::default();
     m.set("Message-ID", &message_id(new_ulid()));
-    m.set("Date", &date_header(now()));
+    m.set("Date", &now_header());
     m.set("From", &actor.from);
     m.set_opt("Sender", actor.sender.as_deref());
     m.set("Subject", subject);
@@ -263,16 +297,13 @@ pub fn reply_subject(title: &str) -> String {
 /// A comment replying to the issue (or to a comment, extending References).
 pub fn comment(actor: &Actor, issue: &Msg, parent: Option<&Msg>, body: &str) -> Msg {
     let mut m = base_message(actor, &reply_subject(issue.get("Subject").unwrap_or("")));
-    match parent {
-        Some(p) => {
-            m.set("In-Reply-To", p.message_id());
-            let refs = p.get("References").unwrap_or(issue.message_id());
-            m.set("References", &format!("{refs} {}", p.message_id()));
-        }
-        None => {
-            m.set("In-Reply-To", issue.message_id());
-            m.set("References", issue.message_id());
-        }
+    if let Some(p) = parent {
+        m.set("In-Reply-To", p.message_id());
+        let refs = p.get("References").unwrap_or(issue.message_id());
+        m.set("References", &format!("{refs} {}", p.message_id()));
+    } else {
+        m.set("In-Reply-To", issue.message_id());
+        m.set("References", issue.message_id());
     }
     set_content_headers(&mut m);
     m.body = mbox::normalize_body(body);
@@ -296,11 +327,11 @@ pub fn is_event(m: &Msg) -> bool {
 /// Mark a body edit (§5.2): X-Edited always, X-Edited-By when the editor
 /// is not the author.
 pub fn mark_edited(m: &mut Msg, actor: &Actor) {
-    m.set("X-Edited", &date_header(now()));
-    if email_of(m.get("From").unwrap_or("")) != email_of(&actor.from) {
-        m.set("X-Edited-By", &actor.from);
-    } else {
+    m.set("X-Edited", &now_header());
+    if email_of(m.get("From").unwrap_or("")) == email_of(&actor.from) {
         m.remove("X-Edited-By");
+    } else {
+        m.set("X-Edited-By", &actor.from);
     }
 }
 
@@ -377,15 +408,10 @@ pub fn diff(before: &Msg, after: &Msg) -> Vec<Change> {
             names.push(k);
         }
     }
-    let mut probe = Msg {
-        headers: names.iter().map(|n| (n.clone(), String::new())).collect(),
-        body: String::new(),
-    };
-    probe.headers = probe.ordered_headers();
-    probe
-        .headers
+    names.sort_by_key(|n| mbox::rank(n));
+    names
         .iter()
-        .filter_map(|(n, _)| {
+        .filter_map(|n| {
             let (a, b) = (before.get(n), after.get(n));
             (a != b).then(|| Change {
                 field: field_label(n),
@@ -493,7 +519,7 @@ pub fn list_of(m: &Msg, header: &str) -> Vec<String> {
 
 /// Set (or with an empty list, remove) a comma-separated header.
 pub fn set_list(m: &mut Msg, header: &str, items: &[String]) {
-    m.set_opt(header, join_list(items).as_deref());
+    m.set(header, &items.join(", "));
 }
 
 /// 1-based comment numbers: message index → n (message #1 and events are

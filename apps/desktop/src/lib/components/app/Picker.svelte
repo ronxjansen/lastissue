@@ -1,10 +1,13 @@
 <!-- Linear-style property picker (GUI-SPEC §5): options come from Rust
-     (they need the index and date parsing) and are re-asked per keystroke.
-     The chosen edit goes to every target (a bulk edit for a selection).
-     Labels stay open to toggle several. -->
+     once (they need the index) and are ranked here as the user types; the
+     typed value (a new label, an address, a date) is asked of Rust per
+     keystroke. The chosen edit goes to every target (a bulk edit for a
+     selection). Labels stay open to toggle several. -->
 <script lang="ts">
   import { api, type PickerKind, type PickOption } from "$lib/api";
-  import { app } from "$lib/app.svelte";
+  import { app, report } from "$lib/app.svelte";
+  import { PRIORITY_LABEL, STATE_LABEL } from "$lib/format";
+  import { rank } from "$lib/fuzzy";
   import CheckIcon from "@lucide/svelte/icons/check";
   import FuzzyList from "./FuzzyList.svelte";
   import Overlay from "./Overlay.svelte";
@@ -21,35 +24,40 @@
   };
 
   let query = $state("");
-  let rows = $state<PickOption[]>([]);
+  let options = $state<PickOption[]>([]);
+  let typed = $state<PickOption | null>(null);
   let asked = 0;
 
-  async function refresh() {
-    const n = ++asked;
-    const r = await api.pickerOptions(picker, ids, query);
-    if (n === asked) rows = r;
+  // State and priority come labelled with their value; title them here.
+  function titled(o: PickOption): PickOption {
+    if (o.edit.kind === "state") return { ...o, label: STATE_LABEL[o.edit.value] };
+    if (o.edit.kind === "priority") return { ...o, label: PRIORITY_LABEL[o.edit.value ?? "none"] };
+    return o;
   }
 
-  $effect(() => {
-    void query;
-    refresh();
-  });
-
-  // The index changed under us (e.g. a label toggled): re-check marks.
+  // On open, and when the index changes under us (e.g. a label toggled).
   $effect(() => {
     void app.issues.size;
     for (const id of ids) void app.byShortId(id)?.labels;
-    refresh();
+    api.pickerOptions(picker, ids).then((r) => (options = r.map(titled)), report);
+  });
+
+  $effect(() => {
+    const n = ++asked;
+    if (!query.trim()) typed = null;
+    else api.pickerTyped(picker, ids, query).then((t) => n === asked && (typed = t), report);
+  });
+
+  const rows = $derived.by(() => {
+    const ranked = rank(options, query, (o) => (o.detail ? `${o.label} ${o.detail}` : o.label));
+    const q = query.trim().toLowerCase();
+    return typed && !ranked.some((o) => o.label.toLowerCase() === q) ? [typed, ...ranked] : ranked;
   });
 
   async function pick(o: PickOption) {
     await app.edit(ids, o.edit);
-    if (picker === "labels") {
-      query = "";
-      await refresh();
-    } else {
-      app.overlay = null;
-    }
+    if (picker === "labels") query = "";
+    else app.overlay = null;
   }
 
   const target = $derived(

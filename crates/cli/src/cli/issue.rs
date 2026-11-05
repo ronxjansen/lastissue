@@ -4,9 +4,7 @@ use super::common::{self, Ctx};
 use super::{CreateArgs, IssueCmd, ListArgs, UpdateArgs};
 use crate::error::Result;
 use crate::format;
-use crate::model::{self, labels_of, priority_of, state_of};
-use crate::store::IssueRef;
-use crate::store::mbox::Msg;
+use crate::model::{self, Activity};
 use lastissue::ops::{self, CloseAs, IssueUpdate, NewIssue};
 use lastissue::query::{self, ListQuery};
 
@@ -58,8 +56,8 @@ fn create(ctx: &mut Ctx, a: CreateArgs) -> Result<()> {
         title: a.title,
         project: a.project,
         body,
-        state: a.state.map(Into::into),
-        priority: a.priority.map(Into::into),
+        state: a.state,
+        priority: a.priority,
         labels: a.label,
         assignee: a.assign,
         watchers: a.watch,
@@ -81,7 +79,7 @@ fn list(ctx: &mut Ctx, a: ListArgs) -> Result<()> {
     let mut q = ListQuery {
         project: a.project,
         no_project: a.no_project,
-        states: a.state.into_iter().map(Into::into).collect(),
+        states: a.state,
         all: a.all,
         labels: a.label,
         assignee: a.assignee,
@@ -91,10 +89,6 @@ fn list(ctx: &mut Ctx, a: ListArgs) -> Result<()> {
         parent: a.parent,
         ready: a.ready,
         expired: a.expired,
-        blocked: false,
-        priorities: Vec::new(),
-        due_before: None,
-        due_after: None,
         search: a.search,
         regex: a.regex,
         sort: a.sort.map(Into::into),
@@ -102,6 +96,7 @@ fn list(ctx: &mut Ctx, a: ListArgs) -> Result<()> {
         offset: a.offset,
         // Stats only for the rows actually printed in full.
         stats: !a.brief,
+        ..Default::default()
     };
     for f in &a.filter {
         q.filter(f)?;
@@ -111,12 +106,12 @@ fn list(ctx: &mut Ctx, a: ListArgs) -> Result<()> {
 
     let root = ctx.store.root.display().to_string();
     if a.brief {
-        let mut out = format!("X-Root: {root}\n");
+        let mut out = format::block(&[("X-Root".into(), root)]);
         for row in &page.rows {
-            out.push_str(&brief(&row.issue, &row.head, ctx.color));
+            out.push_str(&format::brief(&row.issue, &row.head, ctx.color));
         }
         if let Some(n) = next_page {
-            out.push_str(&format!("X-Next: {n}\n"));
+            out.push_str(&format::block(&[("X-Next".into(), n)]));
         }
         ctx.print(&out);
         return Ok(());
@@ -159,73 +154,30 @@ fn list(ctx: &mut Ctx, a: ListArgs) -> Result<()> {
     Ok(())
 }
 
-/// One `--brief` line for an issue head.
-pub fn brief(r: &IssueRef, head: &Msg, color: bool) -> String {
-    format::brief_line(
-        &r.id,
-        state_of(head).as_str(),
-        priority_of(head).map(|p| p.as_str()),
-        &labels_of(head),
-        head.get("Subject").unwrap_or(""),
-        color,
-    )
-}
-
-// ---------------------------------------------------------------- show
-
-/// Computed headers for comment `i` (X-Comment, X-Replying-To).
-pub fn comment_extras(
-    r: &IssueRef,
-    msgs: &[Msg],
-    nums: &[Option<usize>],
-    i: usize,
-) -> Vec<(&'static str, String)> {
-    let mut extra = Vec::new();
-    if let Some(n) = nums[i] {
-        extra.push(("X-Comment", format!("{}/{n}", r.id)));
-        let irt = msgs[i].get("In-Reply-To").unwrap_or("");
-        if irt != msgs[0].message_id() {
-            let target = msgs
-                .iter()
-                .position(|m| m.message_id() == irt)
-                .and_then(|j| nums[j]);
-            let marker = match target {
-                Some(t) => format!("↳ replying to /{t}"),
-                None => "↳ replying to (deleted)".to_string(),
-            };
-            extra.push(("X-Replying-To", marker));
-        }
-    }
-    extra
-}
-
 fn show(ctx: &mut Ctx, id: &str, no_events: bool) -> Result<()> {
     let r = ctx.store.resolve_issue(id)?;
     let msgs = ctx.store.read(&r)?;
-    let nums = model::comment_numbers(&msgs);
-    let updated = msgs.iter().filter_map(|m| m.date()).max();
-    let mut out = String::new();
-    for (i, m) in msgs.iter().enumerate() {
-        if no_events && model::is_event(m) {
+    let head = &msgs[0];
+    let act = model::activity(&msgs);
+    let comments = act
+        .iter()
+        .filter(|a| matches!(a, Activity::Comment { .. }))
+        .count();
+    let mut extra = ctx.ident(&r).to_vec();
+    extra.push(("X-Root", ctx.store.root.display().to_string()));
+    extra.push(("X-Comment-Count", comments.to_string()));
+    if let Some(u) = msgs.iter().filter_map(|m| m.date()).max() {
+        extra.push(("X-Updated", u.to_rfc2822()));
+    }
+    let mut out = format::message_with(head, &extra);
+    for a in &act {
+        if no_events && matches!(a, Activity::Event { .. }) {
             continue;
         }
-        if i == 0 {
-            let mut extra = vec![
-                ("X-Short-Id", r.id.clone()),
-                ("X-Path", ctx.store.rel(&r.path)),
-                ("X-Root", ctx.store.root.display().to_string()),
-                ("X-Comment-Count", nums.iter().flatten().count().to_string()),
-            ];
-            if let Some(u) = updated {
-                extra.push(("X-Updated", u.to_rfc2822()));
-            }
-            out.push_str(&format::message_with(m, &extra));
-        } else {
-            out.push_str(&format::message_with(
-                m,
-                &comment_extras(&r, &msgs, &nums, i),
-            ));
-        }
+        out.push_str(&format::message_with(
+            a.msg(),
+            &format::comment_headers(&r, head, a),
+        ));
     }
     let painted = format::paint(&out, ctx.color, false);
     ctx.print(&painted);
@@ -236,26 +188,18 @@ fn show(ctx: &mut Ctx, id: &str, no_events: bool) -> Result<()> {
 
 fn update(ctx: &mut Ctx, a: UpdateArgs) -> Result<()> {
     let body = common::explicit_body(&a.body)?;
-    // clap makes each set/unset pair exclusive: `Some(None)` = unset.
-    let set_or_clear = |v: Option<String>, clear: bool| {
-        if clear { Some(None) } else { v.map(Some) }
-    };
     let u = IssueUpdate {
         title: a.title,
         body,
-        state: a.state.map(Into::into),
-        priority: if a.no_priority {
-            Some(None)
-        } else {
-            a.priority.map(|p| Some(p.into()))
-        },
+        state: a.state,
+        priority: set_or_clear(a.priority, a.no_priority),
         add_labels: a.add_label,
         remove_labels: a.remove_label,
         assignee: set_or_clear(a.assign, a.unassign),
         watch: a.watch,
         unwatch: a.unwatch,
         due: set_or_clear(a.due, a.no_due),
-        expires: a.expires.map(|d| (!d.trim().is_empty()).then_some(d)),
+        expires: set_or_clear(a.expires, a.no_expires),
         parent: set_or_clear(a.parent, a.no_parent),
         add_blocked_by: a.blocked_by,
         remove_blocked_by: a.unblock,
@@ -268,20 +212,25 @@ fn update(ctx: &mut Ctx, a: UpdateArgs) -> Result<()> {
     Ok(())
 }
 
+/// clap makes each set/unset flag pair exclusive: `Some(None)` = unset.
+#[allow(clippy::option_option, reason = "IssueUpdate's set/unset fields")]
+fn set_or_clear<T>(v: Option<T>, clear: bool) -> Option<Option<T>> {
+    if clear { Some(None) } else { v.map(Some) }
+}
+
 // ---------------------------------------------------------------- delete
 
 fn delete(ctx: &mut Ctx, id: &str) -> Result<()> {
     let d = ops::delete_issue(&ctx.store, id)?;
-    let fields = vec![
+    let mut fields = vec![
         ("Message-ID".to_string(), d.head.message_id().to_string()),
         (
             "Subject".to_string(),
             d.head.get("Subject").unwrap_or("").to_string(),
         ),
-        ("X-Short-Id".to_string(), d.issue.id.clone()),
-        ("X-Path".to_string(), ctx.store.rel(&d.issue.path)),
-        ("X-Deleted".to_string(), "yes".to_string()),
     ];
+    fields.extend(ctx.ident(&d.issue).map(|(k, v)| (k.to_string(), v)));
+    fields.push(("X-Deleted".to_string(), "yes".to_string()));
     let text = format::paint(&format::block(&fields), ctx.color, true);
     ctx.print(&text);
     Ok(())

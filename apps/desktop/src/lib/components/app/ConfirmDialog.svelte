@@ -5,14 +5,8 @@
 
   let { title, detail, confirm, run }: { title: string; detail: string; confirm: string; run: () => void } =
     $props();
-  let open = $state(true);
-
-  $effect(() => {
-    if (!open) app.overlay = null;
-  });
 
   function yes() {
-    open = false;
     app.overlay = null;
     run();
   }
@@ -25,7 +19,7 @@
   }
 </script>
 
-<AlertDialog.Root bind:open>
+<AlertDialog.Root open={true} onOpenChange={(o) => o || (app.overlay = null)}>
   <!-- svelte-ignore a11y_no_static_element_interactions -->
   <AlertDialog.Content onkeydown={keydown}>
     <AlertDialog.Header>

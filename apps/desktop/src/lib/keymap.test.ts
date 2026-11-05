@@ -43,12 +43,14 @@ describe("keymap", () => {
 
   it("applies user overrides and reports bad ones", () => {
     const { keymap, errors } = merge({
-      issues: { x: null, "Shift-X": "toggleSelect", y: "nope" },
+      "//": "a comment",
+      issues: { x: null, "Shift-X": "toggleSelect", y: "nope", z: 3 },
+      list: 1,
       nowhere: {},
     });
     expect(keymap.issues.x).toBeUndefined();
     expect(keymap.issues["shift-x"]).toBe("toggleSelect");
-    expect(errors).toHaveLength(2);
+    expect(errors).toHaveLength(4);
   });
 
   it("pretty-prints", () => {

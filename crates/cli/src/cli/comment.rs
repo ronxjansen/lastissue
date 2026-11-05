@@ -1,12 +1,12 @@
 //! `lastissue comment …`: args → `lastissue::ops` → output.
 
 use super::common::{self, Ctx};
-use super::issue::comment_extras;
 use super::{BodyArgs, CommentCmd};
 use crate::error::Result;
 use crate::format;
-use crate::model;
-use lastissue::ops::{self, CommentRef};
+use crate::model::{self, Activity};
+use crate::store::{IssueRef, mbox::Msg};
+use lastissue::ops;
 
 pub fn run(ctx: &mut Ctx, cmd: CommentCmd) -> Result<()> {
     match cmd {
@@ -22,11 +22,17 @@ pub fn run(ctx: &mut Ctx, cmd: CommentCmd) -> Result<()> {
     }
 }
 
-fn print_comment(ctx: &mut Ctx, c: &CommentRef, idx: usize) {
-    let nums = model::comment_numbers(&c.msgs);
-    let text = format::message_with(&c.msgs[idx], &comment_extras(&c.issue, &c.msgs, &nums, idx));
-    let painted = format::paint(&text, ctx.color, false);
-    ctx.print(&painted);
+/// Print the comments whose message index passes `keep`.
+fn print_comments(ctx: &mut Ctx, r: &IssueRef, msgs: &[Msg], keep: impl Fn(usize) -> bool) {
+    for a in model::activity(msgs) {
+        if let Activity::Comment { index, msg, .. } = a
+            && keep(index)
+        {
+            let text = format::message_with(msg, &format::comment_headers(r, &msgs[0], &a));
+            let painted = format::paint(&text, ctx.color, false);
+            ctx.print(&painted);
+        }
+    }
 }
 
 fn create(ctx: &mut Ctx, id: &str, body: &BodyArgs, reply_to: Option<&str>) -> Result<()> {
@@ -34,24 +40,14 @@ fn create(ctx: &mut Ctx, id: &str, body: &BodyArgs, reply_to: Option<&str>) -> R
     let target = ops::comment_target(&ctx.store, id, reply_to)?;
     let text = common::required_body(body, "")?;
     let c = ops::add_comment(&ctx.store, &ctx.me, &target, &text)?;
-    print_comment(ctx, &c, c.idx);
+    print_comments(ctx, &c.issue, &c.msgs, |i| i == c.idx);
     Ok(())
 }
 
 fn list(ctx: &mut Ctx, id: &str) -> Result<()> {
     let r = ctx.store.resolve_issue(id)?;
     let msgs = ctx.store.read(&r)?;
-    let c = CommentRef {
-        issue: r,
-        msgs,
-        idx: 0,
-    };
-    let nums = model::comment_numbers(&c.msgs);
-    for (i, n) in nums.iter().enumerate() {
-        if n.is_some() {
-            print_comment(ctx, &c, i);
-        }
-    }
+    print_comments(ctx, &r, &msgs, |_| true);
     Ok(())
 }
 
@@ -59,6 +55,6 @@ fn update(ctx: &mut Ctx, q: &str, body: &BodyArgs) -> Result<()> {
     let c = ops::find_comment(&ctx.store, q)?;
     let text = common::required_body(body, &c.msgs[c.idx].body)?;
     let c = ops::edit_comment(&ctx.store, &ctx.me, c, &text)?;
-    print_comment(ctx, &c, c.idx);
+    print_comments(ctx, &c.issue, &c.msgs, |i| i == c.idx);
     Ok(())
 }

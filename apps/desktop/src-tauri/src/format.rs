@@ -1,4 +1,15 @@
-//! Display helpers for names (dates are formatted in the front-end).
+//! Display helpers for names and errors (dates are formatted in the
+//! front-end).
+
+/// `invalid-state: Value: nope` → one line for a status or filter bar.
+pub fn error_line(e: &impl std::fmt::Display) -> String {
+    e.to_string().trim().lines().collect::<Vec<_>>().join(" · ")
+}
+
+/// A project's display name: its slug, spaced (`auth-flow` → `auth flow`).
+pub fn project_name(slug: &str) -> String {
+    slug.replace('-', " ")
+}
 
 /// `Ada Lovelace <ada@example.com>` → `Ada Lovelace`; a bare address →
 /// its local part.

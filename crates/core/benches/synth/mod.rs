@@ -21,6 +21,7 @@ use chrono::{DateTime, Duration, FixedOffset, TimeZone as _};
 use lastissue::model::{self, State};
 use lastissue::store::{self, mbox, mbox::Msg};
 use rayon::prelude::*;
+use std::fmt::Write as _;
 use std::path::{Path, PathBuf};
 use ulid::Ulid;
 
@@ -137,7 +138,7 @@ fn epoch() -> DateTime<FixedOffset> {
 /// 8-char short ID) are a bijection of `i`, so IDs are unique, all 8 chars
 /// long (no prefix collisions), and look random.
 fn issue_ulid(i: usize) -> Ulid {
-    let ms = epoch().timestamp_millis() as u64 + i as u64 * 60_000;
+    let ms = epoch().timestamp_millis().cast_unsigned() + i as u64 * 60_000;
     let low = (i as u128).wrapping_mul(0x009E_3779_B97F) & ((1u128 << 40) - 1);
     Ulid::from_parts(ms, (0xA5A5u128 << 64) | low)
 }
@@ -232,7 +233,7 @@ pub fn issue(i: usize, project: Option<&store::Project>, extra: usize) -> (Strin
         .collect();
     if r.chance(20) {
         let at = r.below(body.len());
-        body[at].push_str(&format!(" {COMMON}"));
+        let _ = write!(body[at], " {COMMON}");
     }
     head.body = body.join("\n");
 
@@ -245,7 +246,7 @@ pub fn issue(i: usize, project: Option<&store::Project>, extra: usize) -> (Strin
     for k in 0..comments + events {
         at += Duration::minutes(5 + r.below(3000) as i64);
         let mu = Ulid::from_parts(
-            at.timestamp_millis() as u64,
+            at.timestamp_millis().cast_unsigned(),
             (u.random() & !0xFFFF_FFFF) | (k as u128 + 1),
         );
         let cmid = msg_id(mu);
@@ -253,16 +254,13 @@ pub fn issue(i: usize, project: Option<&store::Project>, extra: usize) -> (Strin
         let mut m = base(&who, &reply, &cmid, at);
         if k < comments {
             // A third reply to an earlier comment.
-            match (cmids.is_empty(), r.below(3)) {
-                (false, 0) => {
-                    let p = cmids[r.below(cmids.len())].clone();
-                    m.set("In-Reply-To", &p);
-                    m.set("References", &format!("{mid} {p}"));
-                }
-                _ => {
-                    m.set("In-Reply-To", &mid);
-                    m.set("References", &mid);
-                }
+            if let (false, 0) = (cmids.is_empty(), r.below(3)) {
+                let p = cmids[r.below(cmids.len())].clone();
+                m.set("In-Reply-To", &p);
+                m.set("References", &format!("{mid} {p}"));
+            } else {
+                m.set("In-Reply-To", &mid);
+                m.set("References", &mid);
             }
             model::set_content_headers(&mut m);
             let mut lines: Vec<String> = (0..1 + r.below(6))
@@ -272,7 +270,7 @@ pub fn issue(i: usize, project: Option<&store::Project>, extra: usize) -> (Strin
                 })
                 .collect();
             if r.permille(5) {
-                lines[0].push_str(&format!(" {RARE}"));
+                let _ = write!(lines[0], " {RARE}");
             }
             m.body = lines.join("\n");
             cmids.push(cmid);

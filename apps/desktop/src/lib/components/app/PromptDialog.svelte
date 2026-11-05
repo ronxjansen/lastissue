@@ -13,12 +13,7 @@
 
   // svelte-ignore state_referenced_locally
   let value = $state(initial);
-  let open = $state(true);
   let error = $state<string | null>(null);
-
-  $effect(() => {
-    if (!open) app.overlay = null;
-  });
 
   async function go(e: Event) {
     e.preventDefault();
@@ -32,14 +27,14 @@
   }
 </script>
 
-<Dialog.Root bind:open>
+<Dialog.Root open={true} onOpenChange={(o) => o || (app.overlay = null)}>
   <Dialog.Content class="sm:max-w-md">
     <Dialog.Header><Dialog.Title>{title}</Dialog.Title></Dialog.Header>
     <form onsubmit={go} class="grid gap-3">
       <Input bind:value {placeholder} autofocus />
       {#if error}<p class="text-sm text-destructive">{error}</p>{/if}
       <Dialog.Footer>
-        <Button variant="ghost" type="button" onclick={() => (open = false)}>Cancel</Button>
+        <Button variant="ghost" type="button" onclick={() => (app.overlay = null)}>Cancel</Button>
         <Button type="submit" disabled={!value.trim()}>Save</Button>
       </Dialog.Footer>
     </form>

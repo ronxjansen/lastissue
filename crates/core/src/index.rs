@@ -8,7 +8,7 @@
 //! the front-end's own write it already applied) is not a change.
 
 use crate::error::Result;
-use crate::source::{IssueSource, IssueSummary};
+use crate::source::{self, IssueSummary};
 use crate::store::{IssueRef, Project, Store};
 use rayon::prelude::*;
 use std::collections::{BTreeMap, HashMap};
@@ -75,10 +75,10 @@ fn load_error(path: &Path, e: &crate::error::Error) -> LoadError {
     }
 }
 
-fn load_all(src: &dyn IssueSource, refs: &[IssueRef]) -> (Vec<IssueSummary>, Vec<LoadError>) {
+fn load_all(store: &Store, refs: &[IssueRef]) -> (Vec<IssueSummary>, Vec<LoadError>) {
     let results: Vec<_> = refs
         .par_iter()
-        .map(|r| src.load(r).map_err(|e| load_error(&r.path, &e)))
+        .map(|r| source::load(store, r).map_err(|e| load_error(&r.path, &e)))
         .collect();
     let mut ok = Vec::with_capacity(results.len());
     let mut errors = Vec::new();
@@ -93,9 +93,9 @@ fn load_all(src: &dyn IssueSource, refs: &[IssueRef]) -> (Vec<IssueSummary>, Vec
 
 /// Read every issue head and the project list. A corrupt file is reported,
 /// not fatal.
-pub fn scan(store: &Store, src: &dyn IssueSource) -> Result<Reload> {
+pub fn scan(store: &Store) -> Result<Reload> {
     let projects = store.projects()?;
-    let (issues, errors) = load_all(src, &store.issues()?);
+    let (issues, errors) = load_all(store, &store.issues()?);
     Ok(Reload::Full {
         issues,
         projects,
@@ -120,9 +120,9 @@ fn is_structural(store: &Store, path: &Path) -> bool {
 /// Re-read the given changed paths (watcher output). Falls back to a full
 /// [`scan`] when the project structure may have changed; ignores paths
 /// that are not issue files (temp files, the marker, other folders).
-pub fn reload(store: &Store, src: &dyn IssueSource, paths: &[PathBuf]) -> Result<Reload> {
+pub fn reload(store: &Store, paths: &[PathBuf]) -> Result<Reload> {
     if paths.iter().any(|p| is_structural(store, p)) {
-        return scan(store, src);
+        return scan(store);
     }
     let mut refs = Vec::new();
     let mut gone = Vec::new();
@@ -140,7 +140,7 @@ pub fn reload(store: &Store, src: &dyn IssueSource, paths: &[PathBuf]) -> Result
             gone.push(r.path);
         }
     }
-    let (loaded, errors) = load_all(src, &refs);
+    let (loaded, errors) = load_all(store, &refs);
     Ok(Reload::Paths {
         loaded,
         gone,
@@ -176,13 +176,6 @@ impl Key {
     }
 }
 
-fn same_projects(a: &[Project], b: &[Project]) -> bool {
-    a.len() == b.len()
-        && a.iter()
-            .zip(b)
-            .all(|(x, y)| x.id == y.id && x.slug == y.slug && x.dir == y.dir)
-}
-
 impl Index {
     pub fn apply(&mut self, reload: Reload) -> Delta {
         let mut d = Delta::default();
@@ -203,7 +196,7 @@ impl Index {
                         d.changed.push(p.clone());
                     }
                 }
-                d.projects = !same_projects(&self.projects, &projects);
+                d.projects = self.projects != projects;
                 std::mem::swap(&mut self.issues, &mut next);
                 self.projects = projects;
                 self.ids.clear();
@@ -236,12 +229,14 @@ impl Index {
         d
     }
 
-    /// Record a summary the front-end produced itself (e.g. after its own
-    /// write), so the watcher's echo of it is a no-op.
-    pub fn upsert(&mut self, s: IssueSummary) {
+    /// Insert or replace a summary, keeping the ID maps in step.
+    fn upsert(&mut self, s: IssueSummary) {
         let path = s.path.clone();
         if let Some(old) = self.issues.insert(path.clone(), s) {
-            self.unlink(&old);
+            let new = &self.issues[&path];
+            if old.id != new.id || old.message_id != new.message_id {
+                self.unlink(&old);
+            }
         }
         for key in [Key::Id, Key::Mid] {
             let k = key.of(&self.issues[&path]).to_string();
@@ -311,19 +306,6 @@ impl Index {
     pub fn projects(&self) -> &[Project] {
         &self.projects
     }
-
-    /// Open issues per project ID, plus those outside any project.
-    pub fn open_counts(&self) -> (BTreeMap<&str, usize>, usize) {
-        let mut per = BTreeMap::new();
-        let mut none = 0;
-        for s in self.iter().filter(|s| s.state.is_open()) {
-            match &s.project {
-                Some(p) => *per.entry(p.as_str()).or_insert(0) += 1,
-                None => none += 1,
-            }
-        }
-        (per, none)
-    }
 }
 
 #[cfg(test)]
@@ -332,22 +314,16 @@ mod tests {
     use crate::identity::Identity;
     use crate::model::{Actor, State};
     use crate::ops::{self, IssueUpdate, NewIssue};
-    use crate::source::FsScan;
     use crate::store;
 
-    fn setup() -> (tempfile::TempDir, Store, FsScan, Identity) {
+    fn setup() -> (tempfile::TempDir, Store, Identity) {
         let dir = tempfile::tempdir().unwrap();
         let root = store::init(dir.path()).unwrap();
         let me = Identity::fixed(Actor {
             from: "Ada <ada@example.com>".into(),
             sender: None,
         });
-        (
-            dir,
-            Store::new(root.clone()),
-            FsScan::new(Store::new(root)),
-            me,
-        )
+        (dir, Store::new(root), me)
     }
 
     fn new(title: &str) -> NewIssue {
@@ -367,11 +343,11 @@ mod tests {
 
     #[test]
     fn lookups_follow_reloads_and_upserts() {
-        let (_d, s, src, me) = setup();
+        let (_d, s, me) = setup();
         let a = ops::create_issue(&s, &me, &new("A")).unwrap().issue;
         let b = ops::create_issue(&s, &me, &new("B")).unwrap().issue;
         let mut ix = Index::default();
-        ix.apply(scan(&s, &src).unwrap());
+        ix.apply(scan(&s).unwrap());
         let mid = ix.by_id(&a.id).unwrap().message_id.clone();
         assert_eq!(ix.by_message_id(&mid).unwrap().path, a.path);
         assert_eq!(ix.by_id(&b.id).unwrap().path, b.path);
@@ -382,44 +358,44 @@ mod tests {
             .unwrap()
             .issue
             .path;
-        ix.apply(reload(&s, &src, &[a.path.clone(), moved.clone()]).unwrap());
+        ix.apply(reload(&s, &[a.path.clone(), moved.clone()]).unwrap());
         assert_eq!(ix.by_id(&a.id).unwrap().path, moved);
         assert_eq!(ix.by_message_id(&mid).unwrap().path, moved);
 
         // Deleted: gone from both maps.
         ops::delete_issue(&s, &b.id).unwrap();
-        ix.apply(reload(&s, &src, std::slice::from_ref(&b.path)).unwrap());
+        ix.apply(reload(&s, std::slice::from_ref(&b.path)).unwrap());
         assert!(ix.by_id(&b.id).is_none());
 
         // A full rescan rebuilds them.
-        ix.apply(scan(&s, &src).unwrap());
+        ix.apply(scan(&s).unwrap());
         assert_eq!(ix.by_id(&a.id).unwrap().path, moved);
         assert_eq!(ix.len(), 1);
     }
 
     #[test]
     fn path_reload_diffs_and_ignores_noise() {
-        let (_d, s, src, me) = setup();
+        let (_d, s, me) = setup();
         let a = ops::create_issue(&s, &me, &new("A")).unwrap().issue;
         let mut ix = Index::default();
-        let d = ix.apply(scan(&s, &src).unwrap());
+        let d = ix.apply(scan(&s).unwrap());
         assert_eq!((d.changed.len(), d.projects), (1, false));
 
         // Re-reading an unchanged file is not a change.
         assert!(
-            ix.apply(reload(&s, &src, std::slice::from_ref(&a.path)).unwrap())
+            ix.apply(reload(&s, std::slice::from_ref(&a.path)).unwrap())
                 .is_empty()
         );
 
         // Two updates within the burst window: the second rewrites the last
         // event in place (no new message), yet the reload sees it.
         set_state(&s, &me, &a.id, State::Todo);
-        let d = ix.apply(reload(&s, &src, std::slice::from_ref(&a.path)).unwrap());
+        let d = ix.apply(reload(&s, std::slice::from_ref(&a.path)).unwrap());
         assert_eq!(d.changed, vec![a.path.clone()]);
         let msgs = s.read(&a).unwrap().len();
         set_state(&s, &me, &a.id, State::InProgress);
         assert_eq!(s.read(&a).unwrap().len(), msgs, "coalesced in place");
-        let d = ix.apply(reload(&s, &src, std::slice::from_ref(&a.path)).unwrap());
+        let d = ix.apply(reload(&s, std::slice::from_ref(&a.path)).unwrap());
         assert_eq!(d.changed, vec![a.path.clone()]);
         assert_eq!(ix.get(&a.path).unwrap().state, State::InProgress);
 
@@ -429,29 +405,29 @@ mod tests {
             s.root.join(store::MARKER),
             s.root.join("x.txt"),
         ];
-        assert!(ix.apply(reload(&s, &src, &noise).unwrap()).is_empty());
+        assert!(ix.apply(reload(&s, &noise).unwrap()).is_empty());
 
         // Deleted: removed.
         ops::delete_issue(&s, &a.id).unwrap();
-        let d = ix.apply(reload(&s, &src, std::slice::from_ref(&a.path)).unwrap());
+        let d = ix.apply(reload(&s, std::slice::from_ref(&a.path)).unwrap());
         assert_eq!(d.removed, [a.path]);
         assert!(ix.is_empty());
     }
 
     #[test]
     fn structural_changes_rescan() {
-        let (_d, s, src, me) = setup();
+        let (_d, s, me) = setup();
         let a = ops::create_issue(&s, &me, &new("A")).unwrap().issue;
         let mut ix = Index::default();
-        ix.apply(scan(&s, &src).unwrap());
+        ix.apply(scan(&s).unwrap());
 
         let p = ops::create_project(&s, "Auth").unwrap();
-        let d = ix.apply(reload(&s, &src, std::slice::from_ref(&p.dir)).unwrap());
+        let d = ix.apply(reload(&s, std::slice::from_ref(&p.dir)).unwrap());
         assert!(d.projects && d.changed.is_empty());
 
         // Moving an issue: old path gone, new path present.
         let moved = ops::move_issue(&s, &me, &a.id, Some(&p.id)).unwrap().issue;
-        let d = ix.apply(reload(&s, &src, &[a.path.clone(), moved.path.clone()]).unwrap());
+        let d = ix.apply(reload(&s, &[a.path.clone(), moved.path.clone()]).unwrap());
         assert_eq!(
             (d.changed, d.removed),
             (vec![moved.path.clone()], vec![a.path])
@@ -463,25 +439,28 @@ mod tests {
 
         // Renaming the project folder moves every issue in it.
         let renamed = ops::rename_project(&s, &p.id, "Login").unwrap();
-        let d = ix.apply(reload(&s, &src, &[p.dir.clone(), renamed.dir.clone()]).unwrap());
+        let d = ix.apply(reload(&s, &[p.dir.clone(), renamed.dir.clone()]).unwrap());
         assert!(d.projects);
         assert_eq!(d.removed, [moved.path]);
         assert_eq!(ix.projects()[0].slug, "login");
-        assert_eq!(ix.open_counts().0.get(p.id.as_str()), Some(&1));
+        assert_eq!(
+            ix.by_id(&a.id).unwrap().project.as_deref(),
+            Some(p.id.as_str())
+        );
     }
 
     #[test]
     fn corrupt_file_is_reported_and_kept() {
-        let (_d, s, src, me) = setup();
+        let (_d, s, me) = setup();
         let a = ops::create_issue(&s, &me, &new("A")).unwrap().issue;
         let mut ix = Index::default();
-        ix.apply(scan(&s, &src).unwrap());
+        ix.apply(scan(&s).unwrap());
         std::fs::write(&a.path, "not an mbox").unwrap();
-        let r = reload(&s, &src, std::slice::from_ref(&a.path)).unwrap();
+        let r = reload(&s, std::slice::from_ref(&a.path)).unwrap();
         assert_eq!(r.errors().len(), 1);
         assert!(ix.apply(r).is_empty());
         assert_eq!(ix.len(), 1);
-        let r = scan(&s, &src).unwrap();
+        let r = scan(&s).unwrap();
         assert_eq!(r.errors().len(), 1);
     }
 }

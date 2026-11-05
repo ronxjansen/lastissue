@@ -5,7 +5,7 @@
 <script lang="ts">
   import type { PickerKind, Relation } from "$lib/api";
   import { app } from "$lib/app.svelte";
-  import { PRIORITY_LABEL, STATE_LABEL, dateTime, displayName } from "$lib/format";
+  import { PRIORITY_LABEL, STATE_LABEL, dateTime } from "$lib/format";
   import { Button } from "$lib/components/ui/button";
   import Link from "@lucide/svelte/icons/link";
   import X from "@lucide/svelte/icons/x";
@@ -45,7 +45,6 @@
   });
 
   $effect(() => {
-    // Autosize the title.
     void title;
     if (titleEl) {
       titleEl.style.height = "auto";
@@ -79,7 +78,7 @@
   aria-label="Issue detail"
 >
   <header data-tauri-drag-region class="flex h-11 shrink-0 items-center gap-2 pr-3 pl-6 font-mono text-[12px] text-ink-3">
-    <span data-tauri-drag-region class="truncate">{s?.projectSlug ?? "issues"}<span class="px-1 opacity-60">/</span><span class="text-ink-2">{doc.id}</span></span>
+    <span data-tauri-drag-region class="truncate">{s?.projectName ?? "issues"}<span class="px-1 opacity-60">/</span><span class="text-ink-2">{doc.id}</span></span>
     <span data-tauri-drag-region class="flex-1"></span>
     {#if doc.title?.dirty || doc.body?.dirty}<span class="font-sans text-[12px]">Saving…</span>{/if}
     <button class="rounded-md p-1.5 transition-colors hover:bg-wash hover:text-ink" title="Copy link (⌘⇧C)" aria-label="Copy link" onclick={() => app.run("copyIssueLink")}><Link class="size-3.5" /></button>
@@ -133,7 +132,7 @@
             <dd><button class={hv} onclick={() => pick("due")}><span class={s.due ? "" : unset}>{s.due ? new Date(s.due).toLocaleDateString() : "none"}</span></button></dd>
 
             <dt>Project:</dt>
-            <dd class="min-w-0 pr-3 @lg:col-span-3"><button class={hv} onclick={() => pick("project")}><span class="truncate {s.projectSlug ? '' : unset}">{s.projectSlug ?? "none"}</span></button></dd>
+            <dd class="min-w-0 pr-3 @lg:col-span-3"><button class={hv} onclick={() => pick("project")}><span class="truncate {s.projectName ? '' : unset}">{s.projectName ?? "none"}</span></button></dd>
             <dt>File:</dt>
             <dd class="break-all @lg:col-span-3" title={s.key}>{s.key}</dd>
           </dl>
@@ -195,13 +194,13 @@
             {/each}
             {#if doc.watchers.length}
               <dt class="pt-1 text-[13px] text-ink-3">Watching</dt>
-              <dd class="truncate pt-1 text-ink-2">{doc.watchers.map(displayName).join(", ")}</dd>
+              <dd class="truncate pt-1 text-ink-2">{doc.watchers.join(", ")}</dd>
             {/if}
           </dl>
         {/if}
 
         <h2 class="mt-14 mb-4 flex items-baseline gap-2 border-t border-rule-soft pt-6 text-[16px] font-bold text-ink"><span class="font-mono font-normal text-ink-3">§</span>Activity</h2>
-        <Activity items={doc.activity} issueId={doc.id} />
+        {#key doc.id}<Activity items={doc.activity} />{/key}
       </article>
     {/if}
   </div>

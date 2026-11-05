@@ -14,25 +14,7 @@
   import UserRound from "@lucide/svelte/icons/user-round";
 
   const repo = $derived(app.meta.current !== null ? app.meta.repos[app.meta.current] : null);
-
-  // Open issues per project (and outside any), and assigned to me.
-  const counts = $derived.by(() => {
-    const per = new Map<string, number>();
-    let none = 0;
-    let all = 0;
-    let mine = 0;
-    const me = app.meta.me?.toLowerCase();
-    const email = (a: string) => (a.match(/<([^>]+)>/)?.[1] ?? a).trim().toLowerCase();
-    const meEmail = me ? email(me) : null;
-    for (const s of app.issues.values()) {
-      if (["done", "cancelled", "duplicate"].includes(s.state)) continue;
-      all++;
-      if (s.project) per.set(s.project, (per.get(s.project) ?? 0) + 1);
-      else none++;
-      if (meEmail && s.assignee && email(s.assignee) === meEmail) mine++;
-    }
-    return { per, none, all, mine };
-  });
+  const counts = $derived(app.visible.counts);
 
   function active(s: Scope): boolean {
     const v = app.view.scope;
@@ -98,7 +80,7 @@
             onclick={() => go({ kind: "project", project: p.id })}
           >
             <FolderClosed class="size-4 shrink-0 opacity-75" /><span class="flex-1 truncate capitalize">{p.name}</span>
-            <span class={count}>{counts.per.get(p.id) || ""}</span>
+            <span class={count}>{counts.projects[p.id] || ""}</span>
           </button>
         </ContextMenu.Trigger>
         <ContextMenu.Content>
@@ -113,7 +95,7 @@
     {/each}
     <button class="{item} {active({ kind: 'noProject' }) ? on : ''}" onclick={() => go({ kind: "noProject" })}>
       <Inbox class="size-4 shrink-0 opacity-75" /><span class="flex-1">No project</span>
-      <span class={count}>{counts.none || ""}</span>
+      <span class={count}>{counts.noProject || ""}</span>
     </button>
   </nav>
 

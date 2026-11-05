@@ -105,12 +105,8 @@
     });
   });
 
-  export function focus() {
+  function focus() {
     editor?.action((ctx) => ctx.get(editorViewCtx).focus());
-  }
-
-  export function clear() {
-    load("");
   }
 
   function keydown(e: KeyboardEvent) {

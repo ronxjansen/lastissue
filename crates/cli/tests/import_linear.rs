@@ -2,33 +2,18 @@
 //! binary pointed at it through the hidden `LINEAR_API_URL` env var.
 //! Message-IDs are deterministic, so snapshots need few filters.
 
-use assert_cmd::Command;
+mod common;
+
+use common::{Out, bin};
 use mockito::{Matcher, Mock, Server, ServerGuard};
 use serde_json::{Value, json};
 use std::fs;
 use std::path::{Path, PathBuf};
 use tempfile::TempDir;
 
-/// The binary with the repo registry redirected away from the real one
-/// (`init` auto-registers). Tests that inspect the registry override it.
-fn bin() -> Command {
-    let mut cmd = Command::cargo_bin("lastissue").unwrap();
-    cmd.env(
-        "LASTISSUE_REPOS",
-        Path::new(env!("CARGO_TARGET_TMPDIR")).join("test-repos"),
-    );
-    cmd
-}
-
 struct Env {
     dir: TempDir,
     server: ServerGuard,
-}
-
-struct Out {
-    stdout: String,
-    stderr: String,
-    code: i32,
 }
 
 fn r(id: &str, created: &str) -> Value {
@@ -134,7 +119,7 @@ impl Env {
             .mock("POST", "/")
             .match_body(Matcher::AllOf(vec![
                 Matcher::Regex(r"issues\(first: 25".into()),
-                Matcher::Regex(regex_escape(&after)),
+                Matcher::Regex(regex::escape(&after)),
             ]))
             .with_status(status)
             .with_body(body)
@@ -149,33 +134,23 @@ impl Env {
     }
 
     fn run(&self, extra: &[&str]) -> Out {
-        let mut cmd = bin();
-        cmd.current_dir(self.root())
-            .env("LASTISSUE_DIR", self.root())
-            .env("LASTISSUE_FROM", "Ron <ron@example.com>")
-            .env("LINEAR_API_URL", self.server.url())
-            .env("LINEAR_API_KEY", "lin_api_test")
-            .env("NO_COLOR", "1")
-            .args(["import", "linear", "--project", "billing revamp", "--yes"])
-            .args(extra)
-            .write_stdin("");
-        let o = cmd.output().unwrap();
-        Out {
-            stdout: String::from_utf8(o.stdout).unwrap(),
-            stderr: String::from_utf8(o.stderr).unwrap(),
-            code: o.status.code().unwrap(),
-        }
+        Out::of(
+            common::at(self.root())
+                .env("LINEAR_API_URL", self.server.url())
+                .env("LINEAR_API_KEY", "lin_api_test")
+                .args(["import", "linear", "--project", "billing revamp", "--yes"])
+                .args(extra)
+                .write_stdin(""),
+        )
     }
 
     fn ok(&self, extra: &[&str]) -> String {
-        let o = self.run(extra);
-        assert_eq!(o.code, 0, "{}", o.stderr);
-        o.stdout
+        self.run(extra).ok(extra)
     }
 
     fn snap(&self, name: &str, text: &str) {
         let mut s = insta::Settings::clone_current();
-        s.add_filter(&regex_escape(&self.root().display().to_string()), "[ROOT]");
+        s.add_filter(&regex::escape(&self.root().display().to_string()), "[ROOT]");
         s.add_filter(
             r"billing-revamp-[0-9a-hjkmnp-tv-z]{6,8}",
             "billing-revamp-[P]",
@@ -222,18 +197,6 @@ impl Env {
             .find(|t| t.contains(&format!("X-Linear-Id: {ident}\n")))
             .expect("imported file")
     }
-}
-
-fn regex_escape(s: &str) -> String {
-    s.chars()
-        .flat_map(|c| {
-            if "\\.+*?()|[]{}^$".contains(c) {
-                vec!['\\', c]
-            } else {
-                vec![c]
-            }
-        })
-        .collect()
 }
 
 #[test]
@@ -442,7 +405,7 @@ fn unknown_project_lists_valid() {
 
 /// Live smoke test: `LINEAR_API_KEY=… LINEAR_SMOKE_TEAM=ENG cargo test -- --ignored`.
 #[test]
-#[ignore]
+#[ignore = "hits the live Linear API; needs LINEAR_API_KEY and LINEAR_SMOKE_TEAM"]
 fn live_smoke() {
     let (Ok(key), Ok(team)) = (
         std::env::var("LINEAR_API_KEY"),

@@ -3,7 +3,7 @@
      ↵ opens the issue; ⌘↵ applies the query as the view's filter. -->
 <script lang="ts">
   import { api, type Hit } from "$lib/api";
-  import { app } from "$lib/app.svelte";
+  import { app, report } from "$lib/app.svelte";
   import FuzzyList from "./FuzzyList.svelte";
   import Overlay from "./Overlay.svelte";
   import StateIcon from "./StateIcon.svelte";
@@ -11,11 +11,11 @@
   let query = $state(app.view.filter);
 
   $effect(() => {
-    api.search(query);
+    api.search(query).catch(report);
   });
 
   function close() {
-    api.search("");
+    api.search("").catch(report);
     app.overlay = null;
   }
 

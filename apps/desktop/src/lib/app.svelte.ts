@@ -14,6 +14,7 @@ import {
   type Edit,
   type GroupKey,
   type Meta,
+  type NewIssue,
   type PickerKind,
   type Project,
   type Search,
@@ -22,13 +23,14 @@ import {
   type View,
   type Visible,
 } from "./api";
+import { SORT_LABEL } from "./format";
 import { type Action, type Context, type Keymap, merge } from "./keymap";
 import { type Columns, horizontal, locate, toggle, vertical } from "./nav";
 
 /** Title/body edits save this long after the last keystroke (§5.2). */
-export const SAVE_DEBOUNCE_MS = 300;
+const SAVE_DEBOUNCE_MS = 300;
 
-export type Overlay =
+type Overlay =
   | { kind: "picker"; picker: PickerKind; ids: string[] }
   | { kind: "palette"; mode: "all" | "scopes" }
   | { kind: "search" }
@@ -62,7 +64,7 @@ const emptyView: View = {
   grouping: "state",
 };
 
-const SORTS: View["sort"][] = ["priority", "updated", "created", "due", "state"];
+const SORTS = Object.keys(SORT_LABEL) as View["sort"][];
 
 function isTyping(): boolean {
   const el = document.activeElement as HTMLElement | null;
@@ -88,7 +90,7 @@ function write<T>(f: () => Promise<T>): Promise<T> {
   return serial(f);
 }
 
-function report(e: unknown) {
+export function report(e: unknown) {
   toast.error(String(e));
 }
 
@@ -107,8 +109,8 @@ class App {
     list: [],
     total: 0,
     error: null,
-    text: [],
     scanning: false,
+    counts: { all: 0, mine: 0, noProject: 0, projects: {} },
   });
   /** The view as last set here (ahead of `visible.view` until Rust answers). */
   view = $state<View>(emptyView);
@@ -197,6 +199,8 @@ class App {
     if (!d && this.focus === "detail") this.focus = "issues";
   }
 
+  atCursor = (key: string) => this.cursor !== null && this.issues.get(key)?.id === this.cursor;
+
   byShortId(id: string): Summary | undefined {
     const k = this.byId.get(id);
     return k ? this.issues.get(k) : undefined;
@@ -251,6 +255,14 @@ class App {
     serial(() => api.select(id)).catch(report);
   }
 
+  clickIssue(id: string, e: MouseEvent) {
+    this.focus = "issues";
+    if (e.metaKey) {
+      this.cursor = id;
+      this.run("toggleSelect");
+    } else this.open(id);
+  }
+
   closeDoc() {
     this.flushSave();
     this.open(null);
@@ -297,7 +309,7 @@ class App {
     write(() => api.dropCard(ids, target)).catch(report);
   }
 
-  createIssue(issue: Parameters<typeof api.createIssue>[0]) {
+  createIssue(issue: NewIssue) {
     return write(() => api.createIssue(issue)).then((id) => {
       this.cursor = id;
       this.focus = "detail";
@@ -438,8 +450,8 @@ class App {
       case "copyIssueLink": {
         const id = this.targets()[0];
         if (!id) return;
-        api
-          .issueLink(id)
+        const link = this.doc?.id === id && this.doc.link;
+        (link ? Promise.resolve(link) : api.issueLink(id))
           .then((url) => writeText(url).then(() => toast.success(`Copied ${url}`)))
           .catch(report);
         return;

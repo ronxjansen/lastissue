@@ -590,12 +590,12 @@ name = "cli"
 version = "0.1.0"
 dependencies = [
  "assert_cmd",
- "chrono",
  "clap",
  "inquire",
  "insta",
  "lastissue-core",
  "mockito",
+ "regex",
  "serde_json",
  "tempfile",
 ]
@@ -2386,6 +2386,7 @@ name = "lastissue-core"
 version = "0.1.0"
 dependencies = [
  "chrono",
+ "clap",
  "criterion",
  "directories",
  "mail-parser",

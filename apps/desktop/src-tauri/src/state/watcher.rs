@@ -105,11 +105,11 @@ pub fn watch(root: &Path) -> notify::Result<(RepoWatcher, mpsc::Receiver<Batch>)
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::sync::mpsc::TryRecvError;
     use lastissue::identity::Identity;
     use lastissue::model::{Actor, State};
     use lastissue::ops::{self, IssueUpdate, NewIssue};
     use lastissue::store::{self, Store};
+    use std::sync::mpsc::TryRecvError;
 
     fn path_batches(events: &[(u64, &str)], quiet: u64, max: u64) -> Vec<Vec<String>> {
         let (raw_tx, raw_rx) = mpsc::channel::<PathBuf>();
@@ -131,7 +131,8 @@ mod tests {
         }
         drop(raw_tx);
         t.join().unwrap();
-        rx.iter().collect::<Vec<_>>()
+        rx.iter()
+            .collect::<Vec<_>>()
             .into_iter()
             .map(|b| b.paths.iter().map(|p| p.display().to_string()).collect())
             .collect()

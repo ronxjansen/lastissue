@@ -1,30 +1,24 @@
 <script lang="ts">
   import { app } from "$lib/app.svelte";
-  import { groupKeyId } from "$lib/format";
+  import { groupKeyId, groupLabel } from "$lib/format";
+  import GroupIcon from "./GroupIcon.svelte";
   import IssueRow from "./IssueRow.svelte";
-  import PriorityIcon from "./PriorityIcon.svelte";
-  import StateIcon from "./StateIcon.svelte";
   import VirtualList from "./VirtualList.svelte";
   import type { GroupKey } from "$lib/api";
 
-  type Row = { kind: "header"; key: GroupKey; label: string; count: number } | { kind: "issue"; key: string };
+  type Row = { kind: "header"; key: GroupKey; count: number } | { kind: "issue"; key: string };
 
   const rows = $derived.by((): Row[] => {
     const out: Row[] = [];
     for (const gi of app.visible.list) {
       const g = app.visible.groups[gi];
-      out.push({ kind: "header", key: g.key, label: g.label, count: g.items.length });
+      out.push({ kind: "header", key: g.key, count: g.items.length });
       for (const k of g.items) out.push({ kind: "issue", key: k });
     }
     return out;
   });
 
-  const cursorRow = $derived.by(() => {
-    const id = app.cursor;
-    if (!id) return null;
-    const i = rows.findIndex((r) => r.kind === "issue" && app.issues.get(r.key)?.id === id);
-    return i >= 0 ? i : null;
-  });
+  const cursorRow = $derived(rows.findIndex((r) => r.kind === "issue" && app.atCursor(r.key)));
 </script>
 
 {#if rows.length}
@@ -32,8 +26,8 @@
     {#snippet row(r)}
       {#if r.kind === "header"}
         <div class="flex h-full items-end gap-2 border-b border-rule bg-paper pb-2 pl-11 text-[12.5px] font-bold text-ink-2" data-group={groupKeyId(r.key)}>
-          {#if r.key.kind === "state"}<StateIcon state={r.key.value} />{:else}<PriorityIcon priority={r.key.value} />{/if}
-          {r.label}
+          <GroupIcon key={r.key} />
+          {groupLabel(r.key)}
           <span class="font-mono text-[12px] font-normal text-ink-3">{r.count}</span>
         </div>
       {:else}

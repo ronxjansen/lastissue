@@ -5,30 +5,26 @@
 //! unique even when two files share a short ID, and short enough to send
 //! by the thousand.
 
-use crate::format::display_name;
+use crate::format::{display_name, error_line, project_name};
+use crate::link::Link;
+use crate::state::draft::FieldKind;
 use crate::state::edit::Edit;
+use crate::state::picker::PickOption;
 use crate::state::search::{Hit, Tier};
-use crate::state::view_state::{self, Mode, Scope, ViewState, Visible, group_label};
+use crate::state::view_state::ViewState;
+use crate::state::workspace::Workspace;
 use lastissue::index::Index;
 use lastissue::model::{self, Activity, Priority, State};
-use lastissue::query::{GroupKey, Grouping, Sort};
+use lastissue::query::GroupKey;
 use lastissue::registry::Repo;
 use lastissue::source::IssueSummary;
 use lastissue::store::mbox::Msg;
 use lastissue::store::{Project, Store};
 use serde::{Deserialize, Serialize};
-use std::path::Path;
-
-pub fn key_of(store: &Store, path: &Path) -> String {
-    store.rel(path)
-}
+use std::collections::BTreeMap;
 
 fn millis(d: Option<chrono::DateTime<chrono::FixedOffset>>) -> Option<i64> {
     d.map(|d| d.timestamp_millis())
-}
-
-pub fn state_str(s: State) -> &'static str {
-    s.as_str()
 }
 
 pub fn parse_state(s: &str) -> Result<State, String> {
@@ -51,11 +47,12 @@ pub fn parse_priority(s: Option<&str>) -> Result<Option<Priority>, String> {
 pub struct SummaryDto {
     pub key: String,
     pub id: String,
-    pub message_id: String,
     pub project: Option<String>,
-    pub project_slug: Option<String>,
+    pub project_name: Option<String>,
     pub title: String,
     pub state: &'static str,
+    /// Not done, cancelled or a duplicate.
+    pub open: bool,
     pub priority: Option<&'static str>,
     pub labels: Vec<String>,
     pub assignee: Option<String>,
@@ -68,20 +65,18 @@ pub struct SummaryDto {
     pub updated: Option<i64>,
     pub due: Option<i64>,
     pub comment_count: usize,
-    pub blocked_by: usize,
-    pub has_parent: bool,
 }
 
 impl SummaryDto {
     pub fn new(store: &Store, s: &IssueSummary) -> Self {
         SummaryDto {
-            key: key_of(store, &s.path),
+            key: store.rel(&s.path),
             id: s.id.clone(),
-            message_id: s.message_id.clone(),
             project: s.project.clone(),
-            project_slug: s.project_slug.clone(),
+            project_name: s.project_slug.as_deref().map(project_name),
             title: s.title.clone(),
-            state: state_str(s.state),
+            state: s.state.as_str(),
+            open: s.state.is_open(),
             priority: s.priority.map(Priority::as_str),
             labels: s.labels.clone(),
             assignee: s.assignee.clone(),
@@ -93,8 +88,6 @@ impl SummaryDto {
             updated: millis(s.updated),
             due: millis(s.due),
             comment_count: s.comment_count,
-            blocked_by: s.blocked_by.len(),
-            has_parent: s.parent.is_some(),
         }
     }
 }
@@ -112,7 +105,7 @@ impl From<&Project> for ProjectDto {
         ProjectDto {
             id: p.id.clone(),
             slug: p.slug.clone(),
-            name: p.slug.replace('-', " "),
+            name: project_name(&p.slug),
         }
     }
 }
@@ -175,90 +168,9 @@ impl GroupKeyDto {
 impl From<GroupKey> for GroupKeyDto {
     fn from(k: GroupKey) -> Self {
         match k {
-            GroupKey::State(s) => GroupKeyDto::State(state_str(s).into()),
+            GroupKey::State(s) => GroupKeyDto::State(s.as_str().into()),
             GroupKey::Priority(p) => GroupKeyDto::Priority(p.map(|p| p.as_str().into())),
         }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(tag = "kind", content = "project", rename_all = "camelCase")]
-pub enum ScopeDto {
-    Mine,
-    All,
-    Project(String),
-    NoProject,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct ViewDto {
-    pub mode: String,
-    pub scope: ScopeDto,
-    pub filter: String,
-    pub sort: String,
-    pub grouping: String,
-}
-
-fn sort_name(s: Sort) -> &'static str {
-    match s {
-        Sort::Priority => "priority",
-        Sort::Updated => "updated",
-        Sort::Created => "created",
-        Sort::Due => "due",
-        Sort::State => "state",
-    }
-}
-
-impl From<&ViewState> for ViewDto {
-    fn from(v: &ViewState) -> Self {
-        ViewDto {
-            mode: match v.mode {
-                Mode::List => "list",
-                Mode::Board => "board",
-            }
-            .into(),
-            scope: match &v.scope {
-                Scope::Mine => ScopeDto::Mine,
-                Scope::All => ScopeDto::All,
-                Scope::Project(p) => ScopeDto::Project(p.clone()),
-                Scope::NoProject => ScopeDto::NoProject,
-            },
-            filter: v.filter.clone(),
-            sort: sort_name(v.sort).into(),
-            grouping: match v.grouping {
-                Grouping::State => "state",
-                Grouping::Priority => "priority",
-            }
-            .into(),
-        }
-    }
-}
-
-impl ViewDto {
-    /// Apply onto `v`, keeping its selection.
-    pub fn apply(&self, v: &mut ViewState) -> Result<(), String> {
-        v.mode = match self.mode.as_str() {
-            "board" => Mode::Board,
-            _ => Mode::List,
-        };
-        v.scope = match &self.scope {
-            ScopeDto::Mine => Scope::Mine,
-            ScopeDto::All => Scope::All,
-            ScopeDto::Project(p) => Scope::Project(p.clone()),
-            ScopeDto::NoProject => Scope::NoProject,
-        };
-        v.filter = self.filter.clone();
-        v.sort = view_state::SORTS
-            .iter()
-            .map(|(s, _)| *s)
-            .find(|s| sort_name(*s) == self.sort)
-            .ok_or_else(|| format!("unknown sort {:?}", self.sort))?;
-        v.grouping = match self.grouping.as_str() {
-            "priority" => Grouping::Priority,
-            _ => Grouping::State,
-        };
-        Ok(())
     }
 }
 
@@ -266,55 +178,75 @@ impl ViewDto {
 #[serde(rename_all = "camelCase")]
 pub struct GroupDto {
     pub key: GroupKeyDto,
-    pub label: &'static str,
     pub items: Vec<String>,
+}
+
+/// Open issues per sidebar scope.
+#[derive(Debug, Clone, Default, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CountsDto {
+    pub all: usize,
+    pub mine: usize,
+    pub no_project: usize,
+    /// Project short ID → count.
+    pub projects: BTreeMap<String, usize>,
+}
+
+pub fn counts(ix: &Index, me: Option<&str>) -> CountsDto {
+    let me = me.map(model::email_of);
+    let mut c = CountsDto::default();
+    for s in ix.iter().filter(|s| s.state.is_open()) {
+        c.all += 1;
+        match &s.project {
+            Some(p) => *c.projects.entry(p.clone()).or_default() += 1,
+            None => c.no_project += 1,
+        }
+        if me.is_some() && s.assignee.as_deref().map(model::email_of) == me {
+            c.mine += 1;
+        }
+    }
+    c
 }
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct VisibleDto {
-    pub view: ViewDto,
+    pub view: ViewState,
     /// Board columns (and every group, in grouping order).
     pub groups: Vec<GroupDto>,
     /// The list's order: indices into `groups`, non-empty ones only.
     pub list: Vec<usize>,
     pub total: usize,
     pub error: Option<String>,
-    /// The filter's free-text terms (for highlighting).
-    pub text: Vec<String>,
     /// The filter's full-text tier is still running.
     pub scanning: bool,
+    pub counts: CountsDto,
 }
 
 impl VisibleDto {
-    pub fn new(store: &Store, view: &ViewState, v: &Visible, scanning: bool) -> Self {
-        let groups: Vec<GroupDto> = v
-            .groups
-            .iter()
-            .map(|g| GroupDto {
-                key: g.key.into(),
-                label: group_label(g.key),
-                items: g.items.iter().map(|p| key_of(store, p)).collect(),
-            })
-            .collect();
-        let list = v
-            .rows
-            .iter()
-            .filter_map(|r| match r {
-                view_state::ListRow::Header { key, .. } => {
-                    v.groups.iter().position(|g| g.key == *key)
-                }
-                view_state::ListRow::Issue(_) => None,
-            })
-            .collect();
+    pub fn new(ws: &Workspace) -> Self {
+        let v = &ws.visible;
+        let (groups, counts) = match &ws.repo {
+            Some(r) => (
+                v.groups
+                    .iter()
+                    .map(|g| GroupDto {
+                        key: g.key.into(),
+                        items: g.items.iter().map(|p| r.store.rel(p)).collect(),
+                    })
+                    .collect(),
+                counts(&r.index, ws.me()),
+            ),
+            None => Default::default(),
+        };
         VisibleDto {
-            view: view.into(),
+            view: ws.view.clone(),
             groups,
-            list,
+            list: v.list.clone(),
             total: v.total,
             error: v.error.clone(),
-            text: v.text.clone(),
-            scanning,
+            scanning: ws.filter_text.running,
+            counts,
         }
     }
 }
@@ -338,32 +270,32 @@ pub enum EditDto {
 
 impl EditDto {
     pub fn to_edit(&self) -> Result<Edit, String> {
-        Ok(match self.clone() {
-            EditDto::Title(t) => Edit::Title(t),
-            EditDto::Body(b) => Edit::Body(b),
-            EditDto::State(s) => Edit::State(parse_state(&s)?),
+        Ok(match self {
+            EditDto::Title(t) => Edit::Title(t.clone()),
+            EditDto::Body(b) => Edit::Body(b.clone()),
+            EditDto::State(s) => Edit::State(parse_state(s)?),
             EditDto::Priority(p) => Edit::Priority(parse_priority(p.as_deref())?),
-            EditDto::Assignee(a) => Edit::Assignee(a),
-            EditDto::AddLabel(l) => Edit::AddLabel(l),
-            EditDto::RemoveLabel(l) => Edit::RemoveLabel(l),
-            EditDto::Due(d) => Edit::Due(d),
-            EditDto::Project(p) => Edit::Project(p),
+            EditDto::Assignee(a) => Edit::Assignee(a.clone()),
+            EditDto::AddLabel(l) => Edit::AddLabel(l.clone()),
+            EditDto::RemoveLabel(l) => Edit::RemoveLabel(l.clone()),
+            EditDto::Due(d) => Edit::Due(d.clone()),
+            EditDto::Project(p) => Edit::Project(p.clone()),
         })
     }
 }
 
 impl From<&Edit> for EditDto {
     fn from(e: &Edit) -> Self {
-        match e.clone() {
-            Edit::Title(t) => EditDto::Title(t),
-            Edit::Body(b) => EditDto::Body(b),
-            Edit::State(s) => EditDto::State(state_str(s).into()),
+        match e {
+            Edit::Title(t) => EditDto::Title(t.clone()),
+            Edit::Body(b) => EditDto::Body(b.clone()),
+            Edit::State(s) => EditDto::State(s.as_str().into()),
             Edit::Priority(p) => EditDto::Priority(p.map(|p| p.as_str().into())),
-            Edit::Assignee(a) => EditDto::Assignee(a),
-            Edit::AddLabel(l) => EditDto::AddLabel(l),
-            Edit::RemoveLabel(l) => EditDto::RemoveLabel(l),
-            Edit::Due(d) => EditDto::Due(d),
-            Edit::Project(p) => EditDto::Project(p),
+            Edit::Assignee(a) => EditDto::Assignee(a.clone()),
+            Edit::AddLabel(l) => EditDto::AddLabel(l.clone()),
+            Edit::RemoveLabel(l) => EditDto::RemoveLabel(l.clone()),
+            Edit::Due(d) => EditDto::Due(d.clone()),
+            Edit::Project(p) => EditDto::Project(p.clone()),
         }
     }
 }
@@ -375,6 +307,17 @@ pub struct PickOptionDto {
     pub detail: Option<String>,
     pub checked: bool,
     pub edit: EditDto,
+}
+
+impl From<PickOption> for PickOptionDto {
+    fn from(o: PickOption) -> Self {
+        PickOptionDto {
+            edit: (&o.edit).into(),
+            label: o.label,
+            detail: o.detail,
+            checked: o.checked,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Default, Deserialize)]
@@ -427,7 +370,7 @@ pub struct SnippetDto {
 impl HitDto {
     pub fn new(store: &Store, h: &Hit) -> Self {
         HitDto {
-            key: key_of(store, &h.path),
+            key: store.rel(&h.path),
             id: h.id.clone(),
             tier: Tier::label(h.tier),
             snippets: h
@@ -452,26 +395,45 @@ pub struct SearchDto {
     pub error: Option<String>,
 }
 
+impl SearchDto {
+    pub fn new(ws: &Workspace) -> Self {
+        let hits = match &ws.repo {
+            Some(r) => ws
+                .search
+                .hits
+                .iter()
+                .map(|h| HitDto::new(&r.store, h))
+                .collect(),
+            None => Vec::new(),
+        };
+        SearchDto {
+            generation: ws.search.generation,
+            query: ws.search.query.clone(),
+            hits,
+            scanning: ws.search.scanning,
+            error: ws.search.error.clone(),
+        }
+    }
+}
+
 // ------------------------------------------------------------------- doc
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RelationDto {
     pub message_id: String,
-    pub key: Option<String>,
     pub id: Option<String>,
     pub title: Option<String>,
     pub state: Option<&'static str>,
 }
 
-fn relation(store: &Store, ix: &Index, mid: &str) -> RelationDto {
+fn relation(ix: &Index, mid: &str) -> RelationDto {
     let s = ix.by_message_id(mid);
     RelationDto {
         message_id: mid.to_string(),
-        key: s.map(|s| key_of(store, &s.path)),
         id: s.map(|s| s.id.clone()),
         title: s.map(|s| s.title.clone()),
-        state: s.map(|s| state_str(s.state)),
+        state: s.map(|s| s.state.as_str()),
     }
 }
 
@@ -556,9 +518,7 @@ pub struct FieldDto {
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct DocDto {
-    pub key: String,
     pub id: String,
-    pub message_id: Option<String>,
     pub loading: bool,
     pub error: Option<String>,
     pub save_error: Option<String>,
@@ -570,6 +530,7 @@ pub struct DocDto {
     /// adopted disk change, "use theirs"); otherwise they keep their text.
     pub reset: u64,
     pub summary: Option<SummaryDto>,
+    /// `Cc:` display names.
     pub watchers: Vec<String>,
     pub parent: Option<RelationDto>,
     pub blocked_by: Vec<RelationDto>,
@@ -578,15 +539,65 @@ pub struct DocDto {
     pub link: Option<String>,
 }
 
+impl DocDto {
+    pub fn new(ws: &Workspace) -> Option<Self> {
+        let d = ws.doc.as_ref()?;
+        let r = ws.repo.as_ref()?;
+        let field = |k: FieldKind| {
+            d.field(k).map(|f| FieldDto {
+                value: f.value().to_string(),
+                dirty: f.is_dirty(),
+                conflict: f.conflict.clone(),
+            })
+        };
+        let s = r.index.get(&d.path).or_else(|| r.index.by_id(&d.id));
+        let (parent, blocked_by, related) = match s {
+            Some(s) => relations(&r.index, s),
+            None => (None, Vec::new(), Vec::new()),
+        };
+        let watchers = d
+            .msgs
+            .as_ref()
+            .and_then(|m| m.first())
+            .map(|h| model::list_of(h, "Cc"))
+            .unwrap_or_default()
+            .iter()
+            .map(|w| display_name(w))
+            .collect();
+        Some(DocDto {
+            id: d.id.clone(),
+            loading: d.msgs.is_none() && d.error.is_none(),
+            error: d.error.clone(),
+            save_error: d.save_error.clone(),
+            title: field(FieldKind::Title),
+            body: field(FieldKind::Body),
+            leftover: d.leftover.clone(),
+            reset: d.reset,
+            summary: s.map(|s| SummaryDto::new(&r.store, s)),
+            watchers,
+            parent,
+            blocked_by,
+            related,
+            activity: d.msgs.as_deref().map(activity).unwrap_or_default(),
+            link: Some(
+                Link {
+                    repo: r.repo.label.clone(),
+                    issue: Some(d.id.clone()),
+                }
+                .to_url(),
+            ),
+        })
+    }
+}
+
 pub fn relations(
-    store: &Store,
     ix: &Index,
     s: &IssueSummary,
 ) -> (Option<RelationDto>, Vec<RelationDto>, Vec<RelationDto>) {
     (
-        s.parent.as_deref().map(|m| relation(store, ix, m)),
-        s.blocked_by.iter().map(|m| relation(store, ix, m)).collect(),
-        s.related.iter().map(|m| relation(store, ix, m)).collect(),
+        s.parent.as_deref().map(|m| relation(ix, m)),
+        s.blocked_by.iter().map(|m| relation(ix, m)).collect(),
+        s.related.iter().map(|m| relation(ix, m)).collect(),
     )
 }
 
@@ -611,6 +622,39 @@ pub struct MetaDto {
     pub load_errors: Vec<String>,
 }
 
+impl MetaDto {
+    pub fn new(ws: &Workspace) -> Self {
+        let (me, me_error) = match ws.identity.actor() {
+            Ok(a) => (Some(a.from.clone()), None),
+            Err(e) => (None, Some(error_line(&e))),
+        };
+        let current = ws
+            .repo
+            .as_ref()
+            .and_then(|r| ws.repos.iter().position(|x| x.root == r.repo.root));
+        MetaDto {
+            repos: ws.repos.iter().map(RepoDto::from).collect(),
+            current,
+            me,
+            me_error,
+            loaded: ws.repo.as_ref().is_some_and(|r| r.loaded),
+            notice: ws.notice.clone(),
+            failure: ws.repo.as_ref().and_then(|r| r.failure.clone()),
+            error: ws.error.clone(),
+            load_errors: ws
+                .repo
+                .as_ref()
+                .map(|r| {
+                    r.errors
+                        .iter()
+                        .map(|(p, e)| format!("{}: {e}", r.store.rel(p)))
+                        .collect()
+                })
+                .unwrap_or_default(),
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Snapshot {
@@ -621,4 +665,28 @@ pub struct Snapshot {
     pub doc: Option<DocDto>,
     pub search: SearchDto,
     pub keymap: crate::keymap::UserKeymap,
+}
+
+impl Snapshot {
+    pub fn new(ws: &Workspace, keymap: crate::keymap::UserKeymap) -> Self {
+        let (issues, projects) = match &ws.repo {
+            Some(r) => (
+                r.index
+                    .iter()
+                    .map(|s| SummaryDto::new(&r.store, s))
+                    .collect(),
+                projects(&r.index),
+            ),
+            None => Default::default(),
+        };
+        Snapshot {
+            meta: MetaDto::new(ws),
+            issues,
+            projects,
+            visible: VisibleDto::new(ws),
+            doc: DocDto::new(ws),
+            search: SearchDto::new(ws),
+            keymap,
+        }
+    }
 }

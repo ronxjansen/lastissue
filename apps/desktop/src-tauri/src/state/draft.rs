@@ -1,5 +1,5 @@
 //! Draft bookkeeping for the open issue's title and body (GUI-SPEC §5.2),
-//! plain data so it tests without GPUI.
+//! plain data so it tests directly.
 //!
 //! A [`Field`] knows the text last seen on disk (`saved`), the user's
 //! unsaved text (`draft`) and, when the file changed underneath a draft, the
@@ -33,8 +33,8 @@ impl FieldKind {
 pub enum DiskChange {
     /// Same as what we have (including our own write coming back).
     None,
-    /// No draft: the editor should show this new text.
-    Adopt(String),
+    /// No draft: the editor should show the new text.
+    Adopt,
     /// A draft is in the way: the banner asks.
     Conflict,
 }
@@ -109,9 +109,9 @@ impl Field {
         }
         match &self.draft {
             None => {
-                self.saved = disk.clone();
+                self.saved = disk;
                 self.conflict = None;
-                DiskChange::Adopt(disk)
+                DiskChange::Adopt
             }
             // They wrote exactly what we have.
             Some(d) if self.kind.normalize(d) == disk => {
@@ -135,12 +135,11 @@ impl Field {
     }
 
     /// Banner: drop the draft and show the disk text.
-    pub fn use_theirs(&mut self) -> String {
+    pub fn use_theirs(&mut self) {
         if let Some(c) = self.conflict.take() {
             self.saved = c;
         }
         self.draft = None;
-        self.saved.clone()
     }
 }
 
@@ -232,7 +231,7 @@ mod tests {
     fn external_change_without_draft_is_adopted() {
         let mut f = Field::new(FieldKind::Title, "Old");
         assert_eq!(f.disk("Old"), DiskChange::None);
-        assert_eq!(f.disk("New"), DiskChange::Adopt("New".into()));
+        assert_eq!(f.disk("New"), DiskChange::Adopt);
         assert_eq!(f.value(), "New");
     }
 
@@ -250,7 +249,8 @@ mod tests {
         assert_eq!(keep.to_save().as_deref(), Some("mine"));
 
         let mut theirs = f.clone();
-        assert_eq!(theirs.use_theirs(), "theirs");
+        theirs.use_theirs();
+        assert_eq!(theirs.value(), "theirs");
         assert!(!theirs.is_dirty() && theirs.conflict.is_none());
     }
 

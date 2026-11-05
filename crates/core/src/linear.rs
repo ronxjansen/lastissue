@@ -36,7 +36,7 @@ impl Client {
     pub fn new(key: &str) -> Self {
         let agent: ureq::Agent = ureq::Agent::config_builder()
             .http_status_as_error(false)
-            .timeout_global(Some(Duration::from_secs(60)))
+            .timeout_global(Some(Duration::from_mins(1)))
             .build()
             .into();
         Client {
@@ -78,7 +78,7 @@ impl Client {
                 .with_config()
                 .limit(64 * 1024 * 1024)
                 .read_to_string()
-                .unwrap_or_default();
+                .map_err(|e| api_error("linear-api", e.to_string()))?;
             let parsed: Option<Value> = serde_json::from_str(&text).ok();
             let code = parsed
                 .as_ref()

@@ -1,4 +1,4 @@
-//! The `lastissue://` URL scheme (GUI-SPEC §10). Plain parsing, no GPUI.
+//! The `lastissue://` URL scheme (GUI-SPEC §10). Plain parsing.
 //!
 //! - `lastissue://repo/<label>/issue/<id>`: open the repo with that
 //!   registry label and show the issue in the detail pane.
@@ -11,6 +11,7 @@
 //! and `issue` words are case-insensitive.
 
 use lastissue::model;
+use std::fmt::Write as _;
 
 pub const SCHEME: &str = "lastissue";
 
@@ -40,7 +41,7 @@ fn encode(s: &str) -> String {
         if b.is_ascii_alphanumeric() || b"-._~".contains(&b) {
             out.push(b as char);
         } else {
-            out.push_str(&format!("%{b:02X}"));
+            let _ = write!(out, "%{b:02X}");
         }
     }
     out

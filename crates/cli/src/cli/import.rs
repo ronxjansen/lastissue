@@ -3,12 +3,11 @@
 //! naming the flag. Prompts only fill the same values as the flags.
 
 use super::common::Ctx;
-use super::issue::brief;
 use super::{ImportCmd, LinearArgs};
 use crate::error::{Error, Result};
 use crate::format;
-use crate::linear::import::{Destination, Existing, Import, Index, Tally, find_source};
-use crate::linear::{Client, Source};
+use crate::linear::Client;
+use crate::linear::import::{Destination, Existing, Import, Known, Tally, find_source};
 use crate::store;
 use std::io::IsTerminal;
 
@@ -40,24 +39,27 @@ fn prompt_err(e: inquire::InquireError) -> Error {
     }
 }
 
-fn select(msg: &str, options: Vec<String>) -> Result<usize> {
+/// Pick one of `options` (label, value) and return its value.
+fn select<V>(msg: &str, options: Vec<(String, V)>) -> Result<V> {
     if options.is_empty() {
         return Err(Error::not_found("nothing-to-choose").with("Prompt", msg));
     }
-    Ok(inquire::Select::new(msg, options)
+    let (labels, mut values): (Vec<_>, Vec<_>) = options.into_iter().unzip();
+    let i = inquire::Select::new(msg, labels)
         .with_page_size(15)
         .raw_prompt()
         .map_err(prompt_err)?
-        .index)
+        .index;
+    Ok(values.swap_remove(i))
 }
 
 // ---------------------------------------------------------------- flow
 
-fn tally_fields(t: Tally) -> Vec<(String, String)> {
+fn tally_fields(t: Tally, prefix: &str) -> Vec<(String, String)> {
     vec![
-        ("X-Imported".into(), t.imported.to_string()),
-        ("X-Updated".into(), t.updated.to_string()),
-        ("X-Skipped".into(), t.skipped.to_string()),
+        (format!("{prefix}Imported"), t.imported.to_string()),
+        (format!("{prefix}Updated"), t.updated.to_string()),
+        (format!("{prefix}Skipped"), t.skipped.to_string()),
     ]
 }
 
@@ -98,19 +100,21 @@ fn linear(ctx: &mut Ctx, a: LinearArgs) -> Result<()> {
     } else if let Some(q) = &a.team {
         find_source(&client.teams()?, q, "--team")?
     } else if tty {
-        let by = select("Import by:", vec!["Project".into(), "Team".into()])?;
-        let mut list = if by == 0 {
+        let by_project = select(
+            "Import by:",
+            vec![("Project".into(), true), ("Team".into(), false)],
+        )?;
+        let mut list = if by_project {
             client.projects()?
         } else {
             client.teams()?
         };
         list.retain(|s| a.all || !s.closed);
         list.sort_by_key(|s| s.name.to_lowercase());
-        let i = select(
-            if by == 0 { "Project:" } else { "Team:" },
-            list.iter().map(Source::label).collect(),
-        )?;
-        list.swap_remove(i)
+        select(
+            if by_project { "Project:" } else { "Team:" },
+            list.into_iter().map(|s| (s.label(), s)).collect(),
+        )?
     } else {
         return Err(missing("--project <name|slug|uuid> or --team <key>"));
     };
@@ -123,25 +127,28 @@ fn linear(ctx: &mut Ctx, a: LinearArgs) -> Result<()> {
         Destination::None
     } else if tty {
         let projects = ctx.store.projects()?;
-        let mut opts = vec![format!("New \"{new_slug}\"")];
+        // None = pick an existing project next.
+        let mut opts = vec![(
+            format!("New \"{new_slug}\""),
+            Some(Destination::New(new_slug)),
+        )];
         if !projects.is_empty() {
-            opts.push("Existing…".into());
+            opts.push(("Existing…".into(), None));
         }
-        opts.push("No project".into());
-        match select("Import into:", opts.clone())? {
-            0 => Destination::New(new_slug),
-            i if i == opts.len() - 1 => Destination::None,
-            _ => {
-                let i = select("Project:", projects.iter().map(|p| p.dir_name()).collect())?;
-                Destination::Existing(projects[i].clone())
-            }
+        opts.push(("No project".into(), Some(Destination::None)));
+        match select("Import into:", opts)? {
+            Some(d) => d,
+            None => Destination::Existing(select(
+                "Project:",
+                projects.into_iter().map(|p| (p.dir_name(), p)).collect(),
+            )?),
         }
     } else {
         Destination::New(new_slug)
     };
 
     // What's already here: Message-ID and X-Linear-Id → file.
-    let index = Index::scan(&ctx.store)?;
+    let index = Known::scan(&ctx.store)?;
 
     // Pre-pass (only when a prompt needs it): count + already-imported matches.
     let mut count = None;
@@ -151,18 +158,16 @@ fn linear(ctx: &mut Ctx, a: LinearArgs) -> Result<()> {
         let matches = index.already_imported(&all);
         count = Some(all.len());
         if existing.is_none() && matches > 0 {
-            let i = select(
+            existing = Some(select(
                 &format!("{matches} already imported:"),
-                vec!["Skip".into(), "Update".into()],
-            )?;
-            existing = Some(if i == 0 {
-                super::Existing::Skip
-            } else {
-                super::Existing::Update
-            });
+                vec![
+                    ("Skip".into(), Existing::Skip),
+                    ("Update".into(), Existing::Update),
+                ],
+            )?);
         }
     }
-    let existing = existing.map_or(Existing::Skip, Into::into);
+    let existing = existing.unwrap_or_default();
 
     if !a.yes {
         if !tty {
@@ -203,11 +208,7 @@ fn linear(ctx: &mut Ctx, a: LinearArgs) -> Result<()> {
         let (n, next) = match res {
             Ok(x) => x,
             Err(mut e) => {
-                e.fields.extend(
-                    tally_fields(run.tally())
-                        .into_iter()
-                        .map(|(k, v)| (k.trim_start_matches("X-").to_string(), v)),
-                );
+                e.fields.extend(tally_fields(run.tally(), ""));
                 e.fields.retain(|(k, _)| k != "Hint");
                 return Err(e.with(
                     "Hint",
@@ -221,9 +222,9 @@ fn linear(ctx: &mut Ctx, a: LinearArgs) -> Result<()> {
             "Page {page}: {n} issues ({} imported, {} updated, {} skipped)",
             t.imported, t.updated, t.skipped
         );
-        match next {
-            Some(c) => after = Some(c),
-            None => break,
+        after = next;
+        if after.is_none() {
+            break;
         }
     }
 
@@ -233,10 +234,10 @@ fn linear(ctx: &mut Ctx, a: LinearArgs) -> Result<()> {
     if let Some(p) = run.project() {
         fields.push(("List-Id".into(), p.list_id()));
     }
-    fields.extend(tally_fields(run.tally()));
+    fields.extend(tally_fields(run.tally(), "X-"));
     let mut out = format::block(&fields);
     for (r, head) in run.touched() {
-        out.push_str(&brief(r, head, ctx.color));
+        out.push_str(&format::brief(r, head, ctx.color));
     }
     ctx.print(&out);
     Ok(())

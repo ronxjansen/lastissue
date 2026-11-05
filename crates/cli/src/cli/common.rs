@@ -8,7 +8,7 @@ use crate::model::{self, Actor};
 use crate::store::{IssueRef, Store, mbox::Msg};
 use lastissue::identity::Identity;
 use std::cell::Cell;
-use std::io::{IsTerminal, Read, Write};
+use std::io::{IsTerminal, Read};
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
@@ -63,30 +63,26 @@ impl Ctx {
         self.out.push_str(s);
     }
 
-    /// Print messages as written (mbox), with computed headers on message #1
-    /// when it's the issue.
-    pub fn print_msgs(&mut self, r: &IssueRef, msgs: &[&Msg]) {
-        for m in msgs {
-            let text = if model::is_event(m) || m.has("In-Reply-To") {
-                format::message_with(m, &[])
+    /// Computed X-Short-Id and X-Path for an issue.
+    pub fn ident(&self, r: &IssueRef) -> [(&'static str, String); 2] {
+        [
+            ("X-Short-Id", r.id.clone()),
+            ("X-Path", self.store.rel(&r.path)),
+        ]
+    }
+
+    /// Print the messages at `idx` as written (mbox), with computed headers
+    /// on message #1.
+    pub fn print_indices(&mut self, r: &IssueRef, msgs: &[Msg], idx: &[usize]) {
+        for &i in idx {
+            let text = if i == 0 {
+                format::message_with(&msgs[i], &self.ident(r))
             } else {
-                format::message_with(
-                    m,
-                    &[
-                        ("X-Short-Id", r.id.clone()),
-                        ("X-Path", self.store.rel(&r.path)),
-                    ],
-                )
+                format::message_with(&msgs[i], &[])
             };
             let painted = format::paint(&text, self.color, false);
             self.out.push_str(&painted);
         }
-    }
-
-    /// Print the given message indices of `msgs`.
-    pub fn print_indices(&mut self, r: &IssueRef, msgs: &[Msg], idx: &[usize]) {
-        let refs: Vec<&Msg> = idx.iter().map(|&i| &msgs[i]).collect();
-        self.print_msgs(r, &refs);
     }
 
     pub fn take_output(&mut self) -> String {
@@ -98,7 +94,7 @@ impl Ctx {
 
 /// stdin is a pipe or a redirected file (not a TTY, not /dev/null): only
 /// then is it read implicitly, so we never block waiting on a terminal.
-pub fn stdin_is_piped() -> bool {
+fn stdin_is_piped() -> bool {
     #[cfg(unix)]
     {
         use std::os::fd::AsFd;
@@ -143,37 +139,39 @@ pub fn explicit_body(b: &BodyArgs) -> Result<Option<String>> {
     if let Some(p) = &b.body_file {
         return read_file(p).map(Some);
     }
-    if b.stdin == Some(true) {
+    if b.stdin.is_some() {
         return read_stdin().map(Some);
     }
     Ok(None)
 }
 
+/// Explicit body, else piped stdin.
+fn given_body(b: &BodyArgs) -> Result<Option<String>> {
+    match explicit_body(b)? {
+        None if stdin_is_piped() => read_stdin().map(Some),
+        body => Ok(body),
+    }
+}
+
 /// Body for commands where it's optional: explicit, else piped stdin, else empty.
 pub fn optional_body(b: &BodyArgs) -> Result<String> {
-    if let Some(s) = explicit_body(b)? {
-        return Ok(s);
-    }
-    if stdin_is_piped() {
-        return read_stdin();
-    }
-    Ok(String::new())
+    Ok(given_body(b)?.unwrap_or_default())
 }
 
 /// Body for commands where it's required: explicit, piped stdin, $EDITOR on
 /// a TTY, otherwise fail fast.
 pub fn required_body(b: &BodyArgs, initial: &str) -> Result<String> {
-    let body = if let Some(s) = explicit_body(b)? {
-        s
-    } else if stdin_is_piped() {
-        read_stdin()?
-    } else if std::io::stdin().is_terminal() && std::io::stdout().is_terminal() {
-        editor(initial)?
-    } else {
-        return Err(Error::usage("missing-body").with(
-            "Hint",
-            "pass --body TEXT, --body-file PATH, or - with the body on stdin",
-        ));
+    let body = match given_body(b)? {
+        Some(s) => s,
+        None if std::io::stdin().is_terminal() && std::io::stdout().is_terminal() => {
+            editor(initial)?
+        }
+        None => {
+            return Err(Error::usage("missing-body").with(
+                "Hint",
+                "pass --body TEXT, --body-file PATH, or - with the body on stdin",
+            ));
+        }
     };
     if body.trim().is_empty() {
         return Err(Error::validation("empty-body").with("Hint", "the body must not be empty"));
@@ -186,7 +184,7 @@ fn editor(initial: &str) -> Result<String> {
         .or_else(|_| std::env::var("EDITOR"))
         .unwrap_or_else(|_| "vi".into());
     let path = std::env::temp_dir().join(format!("lastissue-{}.md", model::new_ulid()));
-    std::fs::File::create(&path)?.write_all(initial.as_bytes())?;
+    std::fs::write(&path, initial)?;
     let status = Command::new("sh")
         .arg("-c")
         .arg(format!("{editor} \"$1\""))
@@ -197,6 +195,9 @@ fn editor(initial: &str) -> Result<String> {
     let _ = std::fs::remove_file(&path);
     match status {
         Ok(s) if s.success() => Ok(text?),
-        _ => Err(Error::usage("editor-failed").with("Editor", editor)),
+        res => Err(Error::usage("editor-failed").with("Editor", editor).with(
+            "Message",
+            res.map_or_else(|e| e.to_string(), |s| s.to_string()),
+        )),
     }
 }

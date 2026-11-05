@@ -20,7 +20,9 @@ struct TauriSink(tauri::AppHandle);
 
 impl Sink for TauriSink {
     fn emit(&self, event: &str, payload: serde_json::Value) {
-        let _ = self.0.emit(event, payload);
+        if let Err(e) = self.0.emit(event, payload) {
+            eprintln!("lastissue-gui: cannot emit {event}: {e}");
+        }
     }
 }
 
@@ -53,14 +55,20 @@ fn main() {
                 let h = handle.clone();
                 keymap::watch(p, move |km| {
                     if let Some(k) = h.try_state::<commands::Keymap>() {
-                        *k.0.lock().unwrap_or_else(std::sync::PoisonError::into_inner) =
-                            km.clone();
+                        *k.current
+                            .lock()
+                            .unwrap_or_else(std::sync::PoisonError::into_inner) = km.clone();
                     }
-                    let _ = h.emit(events::KEYMAP, km);
+                    if let Err(e) = h.emit(events::KEYMAP, km) {
+                        eprintln!("lastissue-gui: cannot emit {}: {e}", events::KEYMAP);
+                    }
                 })
                 .ok()
             });
-            app.manage(commands::Keymap(std::sync::Mutex::new(user_keymap), watcher));
+            app.manage(commands::Keymap {
+                current: std::sync::Mutex::new(user_keymap),
+                _watcher: watcher,
+            });
 
             let h = hub.clone();
             app.deep_link().on_open_url(move |ev| {

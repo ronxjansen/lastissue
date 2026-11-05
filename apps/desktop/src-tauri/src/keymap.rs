@@ -1,6 +1,6 @@
 //! User keymap overrides (GUI-SPEC §7): `gui-keymap.json` in the config
 //! dir, read here and watched, and pushed to the front-end, which owns the
-//! defaults and the dispatch.
+//! defaults, the dispatch and checking the entries.
 //!
 //! The format is flat: context → key sequence → action, with `null`
 //! unbinding a default.
@@ -11,14 +11,13 @@
 
 use notify::{RecursiveMode, Watcher as _};
 use serde::Serialize;
-use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
 pub const USER_FILE: &str = "gui-keymap.json";
 
 /// What a new user keymap file starts as.
 pub const TEMPLATE: &str = r#"{
-  "//": "Overrides for the default keymap: context -> keys -> action (null unbinds). Contexts: global, workspace, issues, list, board, detail, picker, modal. The command palette (cmd-k) lists every action with its binding.",
+  "//": "Overrides for the default keymap: context -> keys -> action (null unbinds). Contexts: global, workspace, issues, list, board, detail. The command palette (cmd-k) lists every action with its binding.",
   "issues": {}
 }
 "#;
@@ -27,8 +26,8 @@ pub fn user_path() -> Option<PathBuf> {
     directories::ProjectDirs::from("", "", "lastissue").map(|d| d.config_dir().join(USER_FILE))
 }
 
-/// context → keys → action (`None`: unbind).
-pub type Bindings = BTreeMap<String, BTreeMap<String, Option<String>>>;
+/// context → keys → action (`null`: unbind), as written.
+pub type Bindings = serde_json::Map<String, serde_json::Value>;
 
 #[derive(Debug, Clone, Default, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -39,41 +38,13 @@ pub struct UserKeymap {
     pub errors: Vec<String>,
 }
 
-/// Parse a user keymap's text. A shape problem is reported, and the rest
-/// still loads.
-pub fn parse(text: &str) -> (Bindings, Vec<String>) {
-    let mut out = BTreeMap::new();
-    let mut errors = Vec::new();
-    let v: serde_json::Value = match serde_json::from_str(text) {
-        Ok(v) => v,
-        Err(e) => return (out, vec![format!("{USER_FILE}: {e}")]),
-    };
-    let Some(obj) = v.as_object() else {
-        return (out, vec![format!("{USER_FILE}: expected an object of contexts")]);
-    };
-    for (ctx, binds) in obj {
-        if ctx.starts_with("//") {
-            continue;
-        }
-        let Some(binds) = binds.as_object() else {
-            errors.push(format!("{ctx}: expected an object of key → action"));
-            continue;
-        };
-        let mut m = BTreeMap::new();
-        for (keys, action) in binds {
-            match action {
-                serde_json::Value::String(a) => {
-                    m.insert(keys.clone(), Some(a.clone()));
-                }
-                serde_json::Value::Null => {
-                    m.insert(keys.clone(), None);
-                }
-                _ => errors.push(format!("{ctx} / {keys}: expected an action name or null")),
-            }
-        }
-        out.insert(ctx.clone(), m);
+/// Parse a user keymap's text: an object of contexts.
+pub fn parse(text: &str) -> Result<Bindings, String> {
+    match serde_json::from_str(text) {
+        Ok(serde_json::Value::Object(m)) => Ok(m),
+        Ok(_) => Err(format!("{USER_FILE}: expected an object of contexts")),
+        Err(e) => Err(format!("{USER_FILE}: {e}")),
     }
-    (out, errors)
 }
 
 pub fn load(path: Option<&Path>) -> UserKeymap {
@@ -85,7 +56,10 @@ pub fn load(path: Option<&Path>) -> UserKeymap {
         ..UserKeymap::default()
     };
     match std::fs::read_to_string(path) {
-        Ok(text) => (km.bindings, km.errors) = parse(&text),
+        Ok(text) => match parse(&text) {
+            Ok(b) => km.bindings = b,
+            Err(e) => km.errors.push(e),
+        },
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
         Err(e) => km.errors.push(format!("{}: {e}", path.display())),
     }
@@ -120,7 +94,7 @@ pub fn watch(
                 while rx.try_recv().is_ok() {}
                 let km = load(Some(&path));
                 if km != last {
-                    last = km.clone();
+                    last.clone_from(&km);
                     changed(km);
                 }
             }
@@ -134,14 +108,12 @@ mod tests {
     use super::*;
 
     #[test]
-    fn parses_bindings_unbinds_and_reports_bad_entries() {
-        let (b, e) = parse(r#"{"issues": {"x": "toggleSelect", "j": null, "k": 3}, "bad": 1}"#);
-        assert_eq!(b["issues"]["x"].as_deref(), Some("toggleSelect"));
-        assert_eq!(b["issues"]["j"], None);
-        assert!(!b["issues"].contains_key("k"));
-        assert_eq!(e.len(), 2, "{e:?}");
-        let (b, e) = parse("nope");
-        assert!(b.is_empty() && e.len() == 1);
+    fn parses_an_object_of_contexts() {
+        let b = parse(r#"{"issues": {"x": "toggleSelect", "j": null}}"#).unwrap();
+        assert_eq!(b["issues"]["x"], "toggleSelect");
+        assert!(parse("nope").is_err());
+        assert!(parse("[]").is_err());
+        assert!(parse(TEMPLATE).is_ok());
     }
 
     #[test]

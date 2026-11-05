@@ -151,7 +151,7 @@ fn snippet(line: &str, (start, end): (usize, usize)) -> String {
     } else {
         let cs = chars.partition_point(|(i, _)| *i < start);
         let ce = chars.partition_point(|(i, _)| *i < end);
-        let to = ((cs + ce) / 2 + WIDTH / 2).clamp(WIDTH, n);
+        let to = (cs.midpoint(ce) + WIDTH / 2).clamp(WIDTH, n);
         (to - WIDTH, to)
     };
     let text: String = chars[from..to]

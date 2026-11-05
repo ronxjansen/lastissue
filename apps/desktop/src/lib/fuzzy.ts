@@ -1,5 +1,5 @@
-// The palette's matcher, the same scoring as the Rust pickers
-// (`state/picker.rs` `score`): lower is better, null is no match.
+// The fuzzy matcher for the palette and the pickers:
+// lower is better, null is no match.
 // Prefix 0, word start 1, substring 2+i, scattered letters 100+last.
 
 export function score(query: string, text: string): number | null {

@@ -17,11 +17,12 @@ export type Priority = "urgent" | "high" | "medium" | "low";
 export interface Summary {
   key: string;
   id: string;
-  messageId: string;
   project: string | null;
-  projectSlug: string | null;
+  projectName: string | null;
   title: string;
   state: State;
+  /** Not done, cancelled or a duplicate. */
+  open: boolean;
   priority: Priority | null;
   labels: string[];
   assignee: string | null;
@@ -33,8 +34,6 @@ export interface Summary {
   updated: number | null;
   due: number | null;
   commentCount: number;
-  blockedBy: number;
-  hasParent: boolean;
 }
 
 export interface Project {
@@ -43,14 +42,14 @@ export interface Project {
   name: string;
 }
 
-export interface IndexDelta {
+interface IndexDelta {
   full: boolean;
   changed: Summary[];
   removed: string[];
   projects: Project[] | null;
 }
 
-export interface Repo {
+interface Repo {
   label: string;
   root: string;
   global: boolean;
@@ -67,7 +66,7 @@ export type Scope =
   | { kind: "project"; project: string }
   | { kind: "noProject" };
 
-export type Mode = "list" | "board";
+type Mode = "list" | "board";
 export type Sort = "priority" | "updated" | "created" | "due" | "state";
 export type Grouping = "state" | "priority";
 
@@ -79,10 +78,18 @@ export interface View {
   grouping: Grouping;
 }
 
-export interface Group {
+interface Group {
   key: GroupKey;
-  label: string;
   items: string[];
+}
+
+/** Open issues per sidebar scope. */
+interface Counts {
+  all: number;
+  mine: number;
+  noProject: number;
+  /** Project short ID → count. */
+  projects: Record<string, number>;
 }
 
 export interface Visible {
@@ -91,8 +98,8 @@ export interface Visible {
   list: number[];
   total: number;
   error: string | null;
-  text: string[];
   scanning: boolean;
+  counts: Counts;
 }
 
 export type Edit =
@@ -132,7 +139,6 @@ export interface Search {
 
 export interface Relation {
   messageId: string;
-  key: string | null;
   id: string | null;
   title: string | null;
   state: State | null;
@@ -159,16 +165,14 @@ export type Activity =
       lines: string[];
     };
 
-export interface Field {
+interface Field {
   value: string;
   dirty: boolean;
   conflict: string | null;
 }
 
 export interface Doc {
-  key: string;
   id: string;
-  messageId: string | null;
   loading: boolean;
   error: string | null;
   saveError: string | null;
@@ -177,6 +181,7 @@ export interface Doc {
   leftover: string | null;
   reset: number;
   summary: Summary | null;
+  /** `Cc:` display names. */
   watchers: string[];
   parent: Relation | null;
   blockedBy: Relation[];
@@ -197,8 +202,8 @@ export interface Meta {
   loadErrors: string[];
 }
 
-/** context → keys → action (null unbinds). */
-export type Bindings = Record<string, Record<string, string | null>>;
+/** context → keys → action (null unbinds), as written: unchecked. */
+export type Bindings = Record<string, unknown>;
 
 export interface UserKeymap {
   path: string | null;
@@ -250,12 +255,13 @@ export const api = {
   createProject: (name: string) => invoke<Project>("create_project", { name }),
   renameProject: (project: string, name: string) =>
     invoke<Project>("rename_project", { project, name }),
-  pickerOptions: (kind: PickerKind, ids: string[], query: string) =>
-    invoke<PickOption[]>("picker_options", { kind, ids, query }),
+  pickerOptions: (kind: PickerKind, ids: string[]) =>
+    invoke<PickOption[]>("picker_options", { kind, ids }),
+  pickerTyped: (kind: PickerKind, ids: string[], query: string) =>
+    invoke<PickOption | null>("picker_typed", { kind, ids, query }),
   search: (query: string) => invoke<void>("search", { query }),
   openRepo: (index: number) => invoke<void>("open_repo", { index }),
   addRepo: (path: string) => invoke<void>("add_repo", { path }),
-  openUrl: (url: string) => invoke<void>("open_url", { url }),
   issueLink: (id: string) => invoke<string>("issue_link", { id }),
   openKeymapFile: () => invoke<string>("open_keymap_file"),
 };

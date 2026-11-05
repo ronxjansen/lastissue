@@ -2,16 +2,9 @@
 
 import type { GroupKey, Priority, State } from "./api";
 
-/** `Ada Lovelace <ada@x>` → `Ada Lovelace`; a bare address → its local part. */
-export function displayName(addr: string): string {
-  const a = addr.trim();
-  const lt = a.indexOf("<");
-  if (lt >= 0) {
-    const name = a.slice(0, lt).trim().replace(/^"|"$/g, "").trim();
-    if (name) return name;
-  }
-  const email = a.replace(/^</, "").replace(/>$/, "");
-  return email.split("@")[0] ?? email;
+/** `Ada Lovelace` → `Ada` (display names come from Rust). */
+export function firstName(name: string): string {
+  return name.split(" ")[0];
 }
 
 /** Compact relative time: `now`, `5m`, `3h`, `2d`, then a date. */
@@ -38,16 +31,6 @@ export function day(ms: number): string {
   return new Date(ms).toLocaleDateString("en-US", { month: "short", day: "numeric" });
 }
 
-export const STATES: State[] = [
-  "backlog",
-  "todo",
-  "in-progress",
-  "in-review",
-  "done",
-  "cancelled",
-  "duplicate",
-];
-
 export const STATE_LABEL: Record<State, string> = {
   backlog: "Backlog",
   todo: "Todo",
@@ -65,6 +48,10 @@ export const PRIORITY_LABEL: Record<Priority | "none", string> = {
   low: "Low",
   none: "No priority",
 };
+
+export function groupLabel(k: GroupKey): string {
+  return k.kind === "state" ? STATE_LABEL[k.value] : PRIORITY_LABEL[k.value ?? "none"];
+}
 
 export function groupKeyId(k: GroupKey): string {
   return `${k.kind}:${k.value ?? "none"}`;

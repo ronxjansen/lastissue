@@ -7,7 +7,7 @@
   const html = $derived(DOMPurify.sanitize(marked.parse(source, { async: false, gfm: true, breaks: false })));
 </script>
 
-<div class="prose-li {klass}">
+<div class={klass}>
   <!-- eslint-disable-next-line svelte/no-at-html-tags -- sanitized above -->
   {@html html}
 </div>

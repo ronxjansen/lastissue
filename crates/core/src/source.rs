@@ -1,7 +1,5 @@
-//! Where a front-end gets issue heads (GUI-SPEC §2.1, §3): the
-//! [`IssueSource`] trait and its v1 implementation [`FsScan`], a full head
-//! scan on the thread pool. A cached source (derived, keyed by path +
-//! mtime) can implement the same trait later.
+//! Where a front-end gets issue heads (GUI-SPEC §2.1, §3): [`load`] reads
+//! one file's head and stats from disk.
 
 use crate::error::{Error, Result};
 use crate::model::{self, Priority, State};
@@ -9,7 +7,6 @@ use crate::query::Stats;
 use crate::store::mbox::{self, Msg};
 use crate::store::{IssueRef, Store};
 use chrono::{DateTime, FixedOffset};
-use rayon::prelude::*;
 use std::path::Path;
 use std::time::SystemTime;
 
@@ -46,7 +43,7 @@ pub struct IssueSummary {
 }
 
 impl IssueSummary {
-    pub fn new(issue: &IssueRef, head: &Msg, stats: Stats, mtime: Option<SystemTime>) -> Self {
+    fn new(issue: &IssueRef, head: &Msg, stats: Stats, mtime: Option<SystemTime>) -> Self {
         let created = head.date();
         let date = |h: &str| head.get(h).and_then(mbox::parse_date);
         IssueSummary {
@@ -76,52 +73,22 @@ impl IssueSummary {
     }
 }
 
-/// A provider of issue heads for one issues root.
-pub trait IssueSource: Send + Sync {
-    /// Every issue, in path order.
-    fn scan(&self) -> Result<Vec<IssueSummary>>;
-    /// Re-read one issue (e.g. after a watcher event).
-    fn load(&self, issue: &IssueRef) -> Result<IssueSummary>;
-}
-
-/// Reads every file's head directly from disk.
-#[derive(Debug)]
-pub struct FsScan {
-    store: Store,
-}
-
-impl FsScan {
-    pub fn new(store: Store) -> Self {
-        FsScan { store }
-    }
-
-    pub fn store(&self) -> &Store {
-        &self.store
-    }
-}
-
 fn mtime(path: &Path) -> Option<SystemTime> {
     std::fs::metadata(path).and_then(|m| m.modified()).ok()
 }
 
-impl IssueSource for FsScan {
-    fn scan(&self) -> Result<Vec<IssueSummary>> {
-        let issues = self.store.issues()?;
-        issues.par_iter().map(|r| self.load(r)).collect()
+/// Read one issue's head and stats (e.g. after a watcher event).
+pub fn load(store: &Store, issue: &IssueRef) -> Result<IssueSummary> {
+    let mtime = mtime(&issue.path);
+    let bytes = std::fs::read(&issue.path)?;
+    let head = mbox::read_head(&bytes[..])?;
+    if head.headers.is_empty() {
+        // No message #1 (e.g. a file caught mid-write by a non-atomic
+        // writer): not an issue head.
+        return Err(Error::validation("corrupt-file").with("Path", store.rel(&issue.path)));
     }
-
-    fn load(&self, issue: &IssueRef) -> Result<IssueSummary> {
-        let mtime = mtime(&issue.path);
-        let bytes = std::fs::read(&issue.path)?;
-        let head = mbox::read_head(&bytes[..])?;
-        if head.headers.is_empty() {
-            // No message #1 (e.g. a file caught mid-write by a non-atomic
-            // writer): not an issue head.
-            return Err(Error::validation("corrupt-file").with("Path", self.store.rel(&issue.path)));
-        }
-        let stats = mbox::scan_stats(&bytes[..])?.into();
-        Ok(IssueSummary::new(issue, &head, stats, mtime))
-    }
+    let stats = mbox::scan_stats(&bytes[..])?;
+    Ok(IssueSummary::new(issue, &head, stats, mtime))
 }
 
 #[cfg(test)]
@@ -152,8 +119,12 @@ mod tests {
         let t = ops::comment_target(&s, &id, None).unwrap();
         ops::add_comment(&s, &me, &t, "hi").unwrap();
 
-        let src = FsScan::new(Store::new(s.root.clone()));
-        let all = src.scan().unwrap();
+        let all: Vec<IssueSummary> = s
+            .issues()
+            .unwrap()
+            .iter()
+            .map(|r| load(&s, r).unwrap())
+            .collect();
         assert_eq!(all.len(), 1);
         let i = &all[0];
         assert_eq!(
@@ -169,7 +140,6 @@ mod tests {
     #[test]
     fn core_types_are_send_sync() {
         fn check<T: Send + Sync>() {}
-        check::<FsScan>();
         check::<Store>();
         check::<Identity>();
         check::<IssueSummary>();

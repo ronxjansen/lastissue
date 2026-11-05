@@ -7,8 +7,7 @@
 
 use crate::error::{Error, Result};
 use crate::store::{self, ISSUES_DIR, MARKER};
-use std::fs::{self, File};
-use std::io::Write;
+use std::fs;
 use std::path::{Path, PathBuf};
 
 /// Env var overriding the registry file location.
@@ -69,7 +68,7 @@ pub fn path() -> Result<PathBuf> {
     if let Some(p) = std::env::var_os(ENV).filter(|p| !p.is_empty()) {
         return Ok(PathBuf::from(p));
     }
-    directories::ProjectDirs::from("", "", "lastissue")
+    store::project_dirs()
         .map(|d| d.config_dir().join("repos"))
         .ok_or_else(|| {
             Error::not_found("no-config-dir")
@@ -92,31 +91,14 @@ fn entry(line: &str) -> Option<PathBuf> {
 }
 
 fn write_lines(file: &Path, lines: &[String]) -> Result<()> {
-    let dir = file.parent().filter(|d| !d.as_os_str().is_empty());
-    if let Some(d) = dir {
+    if let Some(d) = file.parent().filter(|d| !d.as_os_str().is_empty()) {
         fs::create_dir_all(d)?;
     }
-    let name = file
-        .file_name()
-        .map(|n| n.to_string_lossy().into_owned())
-        .unwrap_or_else(|| "repos".into());
-    let tmp = dir
-        .unwrap_or(Path::new("."))
-        .join(format!(".{name}.{}.tmp", crate::model::new_ulid()));
     let mut text = lines.join("\n");
     if !text.is_empty() {
         text.push('\n');
     }
-    let res = (|| -> std::io::Result<()> {
-        let mut f = File::create(&tmp)?;
-        f.write_all(text.as_bytes())?;
-        f.sync_all()?;
-        fs::rename(&tmp, file)
-    })();
-    if res.is_err() {
-        let _ = fs::remove_file(&tmp);
-    }
-    Ok(res?)
+    store::atomic_write(file, text.as_bytes())
 }
 
 /// Registered repos in insertion order, followed by the implicit global root
@@ -227,13 +209,7 @@ pub fn resolve_in(repos: &[Repo], query: &str) -> Result<Repo> {
             .cloned()
             .ok_or_else(not_found);
     }
-    let exact: Vec<&Repo> = repos.iter().filter(|r| r.label == q).collect();
-    let hits = if exact.is_empty() {
-        repos.iter().filter(|r| r.label.starts_with(q)).collect()
-    } else {
-        exact
-    };
-    match hits.as_slice() {
+    match store::matching(repos, |r| r.label.as_str(), q).as_slice() {
         [] => Err(not_found()),
         [one] => Ok((*one).clone()),
         many => Err(Error::ambiguous_as(

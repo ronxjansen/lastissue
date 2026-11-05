@@ -55,27 +55,32 @@ fn mix64(mut x: u64) -> u64 {
 fn hash80(s: &str) -> u128 {
     let mut h: u64 = 0xcbf29ce484222325;
     for b in s.as_bytes() {
-        h ^= *b as u64;
+        h ^= u64::from(*b);
         h = h.wrapping_mul(0x100000001b3);
     }
     let lo = mix64(h);
     let hi = mix64(lo ^ 0x9e3779b97f4a7c15);
-    (((hi as u128) << 64) | lo as u128) & ((1u128 << 80) - 1)
+    ((u128::from(hi) << 64) | u128::from(lo)) & ((1u128 << 80) - 1)
 }
 
 /// Deterministic ULID for a Linear object.
 pub fn ulid_for(created_at: &str, uuid: &str) -> Ulid {
     let ms = DateTime::parse_from_rfc3339(created_at)
-        .map(|d| d.timestamp_millis().max(0) as u64)
+        .ok()
+        .and_then(|d| u64::try_from(d.timestamp_millis()).ok())
         .unwrap_or(0);
     Ulid::from_parts(ms, hash80(uuid))
 }
 
-fn mid(node: &Value) -> String {
-    model::message_id(ulid_for(
+fn node_ulid(node: &Value) -> Ulid {
+    ulid_for(
         node["createdAt"].as_str().unwrap_or(""),
         node["id"].as_str().unwrap_or(""),
-    ))
+    )
+}
+
+fn mid(node: &Value) -> String {
+    model::message_id(node_ulid(node))
 }
 
 fn date(iso: &str) -> Option<String> {
@@ -181,10 +186,7 @@ fn push_unique(v: &mut Vec<String>, s: String) {
 
 /// Map one fully-fetched Linear issue node.
 pub fn issue(node: &Value, src: &Source) -> Mapped {
-    let ulid = ulid_for(
-        node["createdAt"].as_str().unwrap_or(""),
-        node["id"].as_str().unwrap_or(""),
-    );
+    let ulid = node_ulid(node);
     let issue_mid = model::message_id(ulid);
     let title = mbox::clean_value(node["title"].as_str().unwrap_or(""));
     let title = if title.is_empty() {
@@ -249,17 +251,14 @@ pub fn issue(node: &Value, src: &Source) -> Mapped {
     );
     m.set("Sender", SENDER);
     m.set_opt("To", address(&node["assignee"]).as_deref());
-    m.set_opt("Cc", model::join_list(&watchers).as_deref());
+    model::set_list(&mut m, "Cc", &watchers);
     m.set("Subject", &title);
     m.set("X-Issue-State", st.as_str());
     m.set_opt(
         "X-Priority-Level",
         priority(&node["priority"]).map(|p| p.as_str()),
     );
-    m.set_opt(
-        "Keywords",
-        model::join_list(&model::normalize_labels(labels)).as_deref(),
-    );
+    model::set_list(&mut m, "Keywords", &model::normalize_labels(labels));
     m.set_opt(
         "Reply-By",
         node["dueDate"].as_str().and_then(due).as_deref(),
@@ -268,8 +267,8 @@ pub fn issue(node: &Value, src: &Source) -> Mapped {
         m.set_opt("References", duplicate_of.as_deref());
     }
     m.set_opt("X-Parent", parent.as_deref());
-    m.set_opt("X-Blocked-By", model::join_list(&blocked_by).as_deref());
-    m.set_opt("X-Related", model::join_list(&related).as_deref());
+    model::set_list(&mut m, "X-Blocked-By", &blocked_by);
+    model::set_list(&mut m, "X-Related", &related);
     m.set("X-Linear-Id", node["identifier"].as_str().unwrap_or(""));
     m.set("X-Linear-Url", node["url"].as_str().unwrap_or(""));
     model::set_content_headers(&mut m);
@@ -322,16 +321,13 @@ fn comments(node: &Value, issue_mid: &str, title: &str) -> Vec<Msg> {
                 .find(|o| o.message_id() == p)
                 .and_then(|o| o.get("References").map(str::to_string))
         });
-        match parent_mid {
-            Some(p) => {
-                m.set("In-Reply-To", &p);
-                let refs = parent_refs.unwrap_or_else(|| issue_mid.to_string());
-                m.set("References", &format!("{refs} {p}"));
-            }
-            None => {
-                m.set("In-Reply-To", issue_mid);
-                m.set("References", issue_mid);
-            }
+        if let Some(p) = parent_mid {
+            m.set("In-Reply-To", &p);
+            let refs = parent_refs.unwrap_or_else(|| issue_mid.to_string());
+            m.set("References", &format!("{refs} {p}"));
+        } else {
+            m.set("In-Reply-To", issue_mid);
+            m.set("References", issue_mid);
         }
         m.set_opt("X-Edited", c["editedAt"].as_str().and_then(date).as_deref());
         m.set("X-Linear-Comment-Id", c["id"].as_str().unwrap_or(""));

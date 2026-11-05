@@ -7,6 +7,7 @@ use super::map::{self, Mapped};
 use super::{Source, SourceKind};
 use crate::error::{Error, Result};
 use crate::model::{self, Actor};
+use crate::ops;
 use crate::store::mbox::Msg;
 use crate::store::{self, IssueRef, Project, Store};
 use serde_json::Value;
@@ -14,8 +15,9 @@ use std::collections::HashMap;
 
 /// What to do with issues imported before.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[cfg_attr(feature = "clap", derive(clap::ValueEnum))]
 pub enum Existing {
-    /// Leave them untouched.
+    /// Leave already-imported issues untouched.
     #[default]
     Skip,
     /// Linear wins on the fields it owns; local-only headers and comments stay.
@@ -43,15 +45,15 @@ pub struct Tally {
 /// What's already in the store: imported issues by Message-ID and by
 /// `X-Linear-Id`, plus every short ID (for collision-free new IDs).
 #[derive(Debug, Clone, Default)]
-pub struct Index {
+pub struct Known {
     by_mid: HashMap<String, IssueRef>,
     by_linear: HashMap<String, IssueRef>,
     ids: Vec<String>,
 }
 
-impl Index {
-    pub fn scan(store: &Store) -> Result<Index> {
-        let mut ix = Index::default();
+impl Known {
+    pub fn scan(store: &Store) -> Result<Known> {
+        let mut ix = Known::default();
         for r in store.issues()? {
             let head = store.read_head(&r)?;
             if let Some(l) = head.get("X-Linear-Id") {
@@ -86,14 +88,14 @@ pub struct Import {
     project: Option<Project>,
     existing: Existing,
     actor: Actor,
-    index: Index,
+    known: Known,
     tally: Tally,
     touched: Vec<(IssueRef, Msg)>,
 }
 
 impl Import {
     /// `from` is the importing user; messages get `Sender: lastissue-import`.
-    pub fn new(index: Index, into: Destination, existing: Existing, from: String) -> Import {
+    pub fn new(known: Known, into: Destination, existing: Existing, from: String) -> Import {
         Import {
             into,
             project: None,
@@ -102,7 +104,7 @@ impl Import {
                 from,
                 sender: Some(map::SENDER.into()),
             },
-            index,
+            known,
             tally: Tally::default(),
             touched: Vec::new(),
         }
@@ -129,19 +131,9 @@ impl Import {
                 Destination::Existing(p) => Some(p.clone()),
                 Destination::New(slug) => {
                     let projects = store.projects()?;
-                    if let Some(p) = projects.into_iter().find(|p| &p.slug == slug) {
-                        Some(p)
-                    } else {
-                        let existing: Vec<String> =
-                            store.projects()?.into_iter().map(|p| p.id).collect();
-                        let (_, id) = store::fresh_id(&existing);
-                        let p = Project {
-                            dir: store.root.join(format!("{slug}-{id}")),
-                            id,
-                            slug: slug.clone(),
-                        };
-                        std::fs::create_dir(&p.dir)?;
-                        Some(p)
+                    match projects.iter().find(|p| &p.slug == slug) {
+                        Some(p) => Some(p.clone()),
+                        None => Some(ops::new_project(store, slug.clone(), &projects)?),
                     }
                 }
             };
@@ -152,7 +144,7 @@ impl Import {
     /// Import one fetched Linear issue node.
     pub fn node(&mut self, store: &Store, node: &Value, src: &Source) -> Result<()> {
         let m = map::issue(node, src);
-        let found = self.index.find(&m);
+        let found = self.known.find(&m);
         match (found, self.existing) {
             (Some(_), Existing::Skip) => self.tally.skipped += 1,
             (Some(r), Existing::Update) => {
@@ -167,14 +159,14 @@ impl Import {
                 let project = self.destination(store)?;
                 let mut issue = m.issue;
                 issue.set_opt("List-Id", project.as_ref().map(Project::list_id).as_deref());
-                let id = store::short_id_for(m.ulid, &self.index.ids).ok_or_else(|| {
+                let id = store::short_id_for(m.ulid, &self.known.ids).ok_or_else(|| {
                     Error::validation("id-collision")
                         .with("Linear-Id", m.identifier.clone())
                         .with("Message-ID", issue.message_id())
                 })?;
                 let slug = store::slugify(issue.get("Subject").unwrap_or(""), 4, "issue");
                 let path = store.issue_path(project.as_ref(), &slug, &id);
-                self.index.ids.push(id.clone());
+                self.known.ids.push(id.clone());
                 let r = IssueRef { id, path, project };
                 let mut msgs = vec![issue];
                 msgs.extend(m.comments);
@@ -199,7 +191,7 @@ fn update(store: &Store, r: &IssueRef, m: Mapped, actor: &Actor) -> Result<Optio
     let mut lines = model::diff_lines(&before, &msgs[0]);
     if msgs[0].body != m.issue.body {
         msgs[0].body.clone_from(&m.issue.body);
-        msgs[0].set("X-Edited", &model::date_header(model::now()));
+        msgs[0].set("X-Edited", &model::now_header());
         msgs[0].set("X-Edited-By", map::SENDER);
         lines.push("body: updated from Linear".into());
     }
@@ -216,7 +208,7 @@ fn update(store: &Store, r: &IssueRef, m: Mapped, actor: &Actor) -> Result<Optio
                 x.body.clone_from(&c.body);
                 let when = c
                     .get("X-Edited")
-                    .map_or_else(|| model::date_header(model::now()), str::to_string);
+                    .map_or_else(model::now_header, str::to_string);
                 x.set("X-Edited", &when);
                 edited += 1;
             }

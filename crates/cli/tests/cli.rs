@@ -1,30 +1,15 @@
 //! CLI snapshot tests against a temp root (§7.3).
 
-use assert_cmd::Command;
+mod common;
+
+use common::{Out, bin};
 use std::fs;
 use std::path::{Path, PathBuf};
 use tempfile::TempDir;
 
-/// The binary with the repo registry redirected away from the real one
-/// (`init` auto-registers). Tests that inspect the registry override it.
-fn bin() -> Command {
-    let mut cmd = Command::cargo_bin("lastissue").unwrap();
-    cmd.env(
-        "LASTISSUE_REPOS",
-        Path::new(env!("CARGO_TARGET_TMPDIR")).join("test-repos"),
-    );
-    cmd
-}
-
 struct Env {
     dir: TempDir,
     ids: Vec<(String, String)>,
-}
-
-struct Out {
-    stdout: String,
-    stderr: String,
-    code: i32,
 }
 
 impl Env {
@@ -43,27 +28,16 @@ impl Env {
     }
 
     fn run(&self, args: &[&str], stdin: Option<&str>) -> Out {
-        let mut cmd = bin();
-        cmd.current_dir(self.root())
-            .env("LASTISSUE_DIR", self.root())
-            .env("LASTISSUE_FROM", "Ron <ron@example.com>")
-            .env_remove("LASTISSUE_SENDER")
-            .env("NO_COLOR", "1")
-            .args(args)
-            .write_stdin(stdin.unwrap_or(""));
-        let o = cmd.output().unwrap();
-        Out {
-            stdout: String::from_utf8(o.stdout).unwrap(),
-            stderr: String::from_utf8(o.stderr).unwrap(),
-            code: o.status.code().unwrap(),
-        }
+        Out::of(
+            common::at(self.root())
+                .args(args)
+                .write_stdin(stdin.unwrap_or("")),
+        )
     }
 
     /// Run, expect success, return stdout.
     fn ok(&self, args: &[&str]) -> String {
-        let o = self.run(args, None);
-        assert_eq!(o.code, 0, "args {args:?} failed:\n{}", o.stderr);
-        o.stdout
+        self.run(args, None).ok(args)
     }
 
     /// Remember an ID under a stable placeholder for snapshots.
@@ -73,7 +47,7 @@ impl Env {
 
     fn snap(&self, name: &str, text: &str) {
         let mut s = insta::Settings::clone_current();
-        s.add_filter(&regex_escape(&self.root().display().to_string()), "[ROOT]");
+        s.add_filter(&regex::escape(&self.root().display().to_string()), "[ROOT]");
         // ULIDs first, so a short ID can't match inside one.
         s.add_filter(r"[0-9A-HJKMNP-TV-Z]{26}", "[ULID]");
         for (id, label) in &self.ids {
@@ -93,18 +67,6 @@ impl Env {
         );
         s.bind(|| insta::assert_snapshot!(name, text));
     }
-}
-
-fn regex_escape(s: &str) -> String {
-    s.chars()
-        .flat_map(|c| {
-            if "\\.+*?()|[]{}^$".contains(c) {
-                vec!['\\', c]
-            } else {
-                vec![c]
-            }
-        })
-        .collect()
 }
 
 /// `X-Short-Id: abc123` from mutation output.
@@ -594,27 +556,18 @@ fn repo_registry() {
     let t = fs::canonicalize(tmp.path()).unwrap();
     let reg = t.join("cfg/repos");
     let run = |cwd: &Path, args: &[&str]| {
-        let o = bin()
-            .current_dir(cwd)
-            .env("LASTISSUE_REPOS", &reg)
-            .env_remove("LASTISSUE_DIR")
-            .env("LASTISSUE_FROM", "Ron <ron@example.com>")
-            .env("NO_COLOR", "1")
-            .args(args)
-            .write_stdin("")
-            .output()
-            .unwrap();
-        Out {
-            stdout: String::from_utf8(o.stdout).unwrap(),
-            stderr: String::from_utf8(o.stderr).unwrap(),
-            code: o.status.code().unwrap(),
-        }
+        Out::of(
+            bin()
+                .current_dir(cwd)
+                .env("LASTISSUE_REPOS", &reg)
+                .env_remove("LASTISSUE_DIR")
+                .env("LASTISSUE_FROM", "Ron <ron@example.com>")
+                .env("NO_COLOR", "1")
+                .args(args)
+                .write_stdin(""),
+        )
     };
-    let ok = |cwd: &Path, args: &[&str]| {
-        let o = run(cwd, args);
-        assert_eq!(o.code, 0, "{args:?}: {}", o.stderr);
-        o.stdout
-    };
+    let ok = |cwd: &Path, args: &[&str]| run(cwd, args).ok(args);
     // Registered repos only; the implicit global block is always last.
     let listed = || {
         let out = ok(&t, &["repo", "list"]);

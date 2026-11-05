@@ -1,7 +1,9 @@
-//! Output: mbox / header blocks, `--brief` lines, error blocks, colour.
+//! Output: mbox / header blocks, `--brief` lines, computed headers, colour.
 
-use crate::error::Error;
+use crate::model::{Activity, Priority, State, labels_of, priority_of, state_of};
+use crate::store::IssueRef;
 use crate::store::mbox::{self, Msg};
+use std::fmt::Write as _;
 use std::io::IsTerminal;
 
 pub fn color_enabled() -> bool {
@@ -12,23 +14,22 @@ const BOLD: &str = "\x1b[1m";
 const DIM: &str = "\x1b[2m";
 const RESET: &str = "\x1b[0m";
 
-fn state_color(state: &str) -> &'static str {
+fn state_color(state: State) -> &'static str {
     match state {
-        "in-progress" => "\x1b[33m",
-        "in-review" => "\x1b[35m",
-        "todo" => "\x1b[36m",
-        "backlog" => "\x1b[2m",
-        "done" => "\x1b[32m",
-        _ => "\x1b[2m",
+        State::InProgress => "\x1b[33m",
+        State::InReview => "\x1b[35m",
+        State::Todo => "\x1b[36m",
+        State::Done => "\x1b[32m",
+        State::Backlog | State::Cancelled | State::Duplicate => DIM,
     }
 }
 
-fn priority_color(p: &str) -> &'static str {
+fn priority_color(p: Option<Priority>) -> &'static str {
     match p {
-        "urgent" => "\x1b[1;31m",
-        "high" => "\x1b[31m",
-        "medium" => "\x1b[33m",
-        _ => "\x1b[2m",
+        Some(Priority::Urgent) => "\x1b[1;31m",
+        Some(Priority::High) => "\x1b[31m",
+        Some(Priority::Medium) => "\x1b[33m",
+        _ => DIM,
     }
 }
 
@@ -43,7 +44,7 @@ pub fn paint(text: &str, color: bool, blocks: bool) -> String {
     for line in text.split_inclusive('\n') {
         let bare = line.trim_end_matches('\n');
         if bare.starts_with("From ") && bare.contains("@lastissue ") {
-            out.push_str(&format!("{DIM}{bare}{RESET}\n"));
+            let _ = writeln!(out, "{DIM}{bare}{RESET}");
             in_headers = true;
             continue;
         }
@@ -57,13 +58,13 @@ pub fn paint(text: &str, color: bool, blocks: bool) -> String {
             && !k.contains(' ')
         {
             let v = if k == "X-Issue-State" {
-                format!("{}{v}{RESET}", state_color(v))
+                format!("{}{v}{RESET}", State::parse(v).map_or(DIM, state_color))
             } else if k == "X-Priority-Level" {
-                format!("{}{v}{RESET}", priority_color(v))
+                format!("{}{v}{RESET}", priority_color(Priority::parse(v)))
             } else {
                 v.to_string()
             };
-            out.push_str(&format!("{BOLD}{k}:{RESET} {v}\n"));
+            let _ = writeln!(out, "{BOLD}{k}:{RESET} {v}");
             continue;
         }
         out.push_str(line);
@@ -83,11 +84,35 @@ pub fn message_with(msg: &Msg, computed: &[(&str, String)]) -> String {
 
 /// A bare header block (no separator line, no body).
 pub fn block(fields: &[(String, String)]) -> String {
-    let mut s = String::new();
-    for (k, v) in fields {
-        s.push_str(&format!("{k}: {v}\n"));
+    fields
+        .iter()
+        .flat_map(|(k, v)| [k.as_str(), ": ", v, "\n"])
+        .collect()
+}
+
+/// Computed headers for a comment (X-Comment, X-Replying-To); none for events.
+pub fn comment_headers(r: &IssueRef, head: &Msg, a: &Activity) -> Vec<(&'static str, String)> {
+    let Activity::Comment {
+        number,
+        reply_to,
+        msg,
+        ..
+    } = a
+    else {
+        return Vec::new();
+    };
+    let mut h = vec![("X-Comment", format!("{}/{number}", r.id))];
+    // `reply_to` is None both for a reply to the issue and for a deleted target.
+    if msg.get("In-Reply-To") != Some(head.message_id()) {
+        h.push((
+            "X-Replying-To",
+            match reply_to {
+                Some(t) => format!("↳ replying to /{t}"),
+                None => "↳ replying to (deleted)".into(),
+            },
+        ));
     }
-    s
+    h
 }
 
 fn truncate(s: &str, max: usize) -> String {
@@ -100,31 +125,25 @@ fn truncate(s: &str, max: usize) -> String {
 }
 
 /// `7hq2mz  todo  high  bug,auth  Login crashes…`
-pub fn brief_line(
-    id: &str,
-    state: &str,
-    priority: Option<&str>,
-    labels: &[String],
-    subject: &str,
-    color: bool,
-) -> String {
+pub fn brief(r: &IssueRef, head: &Msg, color: bool) -> String {
+    let state = state_of(head);
+    let prio = priority_of(head);
+    let labels = labels_of(head);
     let labels = if labels.is_empty() {
         "-".to_string()
     } else {
         labels.join(",")
     };
-    let prio = priority.unwrap_or("-");
-    let (sc, pc, r) = if color {
+    let (sc, pc, reset) = if color {
         (state_color(state), priority_color(prio), RESET)
     } else {
         ("", "", "")
     };
     format!(
-        "{id:<8}  {sc}{state:<11}{r}  {pc}{prio:<6}{r}  {labels}  {}\n",
-        truncate(subject, 72)
+        "{:<8}  {sc}{:<11}{reset}  {pc}{:<6}{reset}  {labels}  {}\n",
+        r.id,
+        state.as_str(),
+        prio.map_or("-", Priority::as_str),
+        truncate(head.get("Subject").unwrap_or(""), 72)
     )
-}
-
-pub fn print_error(e: &Error) {
-    eprint!("{e}");
 }

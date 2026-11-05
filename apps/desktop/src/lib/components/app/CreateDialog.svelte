@@ -20,11 +20,6 @@
   let assignToMe = $state(scope.kind === "mine");
   let busy = $state(false);
   let error = $state<string | null>(null);
-  let open = $state(true);
-
-  $effect(() => {
-    if (!open) app.overlay = null;
-  });
 
   async function submit() {
     if (!title.trim() || busy) return;
@@ -58,7 +53,7 @@
   const selectClass = "h-8 rounded-md border border-transparent bg-wash px-2.5 text-[13px] text-ink-2 outline-none transition-colors hover:bg-wash-strong focus:border-rule focus:bg-sheet";
 </script>
 
-<Dialog.Root bind:open>
+<Dialog.Root open={true} onOpenChange={(o) => o || (app.overlay = null)}>
   <!-- svelte-ignore a11y_no_static_element_interactions -->
   <Dialog.Content class="sm:max-w-2xl" onkeydown={keydown}>
     <Dialog.Header>
@@ -107,7 +102,7 @@
     </div>
     {#if error}<p class="text-sm text-destructive">{error}</p>{/if}
     <Dialog.Footer>
-      <Button variant="ghost" onclick={() => (open = false)}>Cancel</Button>
+      <Button variant="ghost" onclick={() => (app.overlay = null)}>Cancel</Button>
       <Button onclick={submit} disabled={!title.trim() || busy}>Create issue <span class="opacity-60">⌘↵</span></Button>
     </Dialog.Footer>
   </Dialog.Content>

@@ -5,9 +5,11 @@
 //! RFC 3339 dates.
 
 use crate::error::{Error, Result};
-use chrono::{DateTime, Datelike, Days, FixedOffset, Local, NaiveDate, TimeZone, Weekday};
+use chrono::{
+    DateTime, Datelike, Days, FixedOffset, Local, NaiveDate, NaiveTime, TimeZone, Weekday,
+};
 
-pub const VALID_DATES: &str =
+const VALID_DATES: &str =
     "YYYY-MM-DD, today, tomorrow, +Nd, +Nw, monday..sunday (or mon..sun), RFC 5322";
 
 fn invalid(input: &str) -> Error {
@@ -47,13 +49,9 @@ pub fn parse_day(input: &str, today: NaiveDate) -> Option<NaiveDate> {
         };
     }
     if let Some(wd) = weekday(&s) {
-        let cur = today.weekday().num_days_from_monday() as i64;
-        let target = wd.num_days_from_monday() as i64;
-        let mut delta = (target - cur).rem_euclid(7);
-        if delta == 0 {
-            delta = 7;
-        }
-        return today.checked_add_days(Days::new(delta as u64));
+        let cur = today.weekday().num_days_from_monday();
+        let delta = (wd.num_days_from_monday() + 6 - cur) % 7 + 1;
+        return today.checked_add_days(Days::new(u64::from(delta)));
     }
     NaiveDate::parse_from_str(&s, "%Y-%m-%d").ok()
 }
@@ -67,16 +65,12 @@ pub fn parse(input: &str, now: DateTime<Local>) -> Result<DateTime<FixedOffset>>
         return Ok(d);
     }
     let day = parse_day(input, now.date_naive()).ok_or_else(|| invalid(input))?;
-    let naive = day.and_hms_opt(0, 0, 0).unwrap();
+    let naive = day.and_time(NaiveTime::MIN);
     let local = Local
         .from_local_datetime(&naive)
         .earliest()
         .ok_or_else(|| invalid(input))?;
     Ok(local.fixed_offset())
-}
-
-pub fn to_header(d: DateTime<FixedOffset>) -> String {
-    d.to_rfc2822()
 }
 
 #[cfg(test)]

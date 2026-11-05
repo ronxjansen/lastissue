@@ -9,9 +9,12 @@ name = "lastissue"
 
 [features]
 linear = ["dep:ureq", "dep:serde_json"]
+# clap::ValueEnum on State, Priority and linear::import::Existing (for the CLI).
+clap = ["dep:clap"]
 
 [dependencies]
 chrono.workspace = true
+clap = { workspace = true, optional = true }
 directories.workspace = true
 mail-parser.workspace = true
 rayon.workspace = true

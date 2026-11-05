@@ -171,7 +171,7 @@ fn git_config(dir: Option<&Path>, key: &str) -> Option<String> {
 
 /// `Name <email>` from git config (run in `dir`), if it yields a valid
 /// address.
-pub fn from_git(dir: Option<&Path>) -> Option<String> {
+fn from_git(dir: Option<&Path>) -> Option<String> {
     let email = git_config(dir, "user.email")?;
     let addr = match git_config(dir, "user.name") {
         Some(name) => format!("{name} <{email}>"),
@@ -181,7 +181,7 @@ pub fn from_git(dir: Option<&Path>) -> Option<String> {
 }
 
 /// `$USER@host` (SPEC §4's last resort).
-pub fn fallback_address() -> String {
+fn fallback_address() -> String {
     let user = std::env::var("USER")
         .or_else(|_| std::env::var("USERNAME"))
         .unwrap_or_else(|_| "unknown".into());

@@ -23,7 +23,7 @@ use lastissue::index::{self, Index};
 use lastissue::model::{self, Actor};
 use lastissue::query::{self, Filter, Grouping, ListQuery, Sort};
 use lastissue::search::Terms;
-use lastissue::source::{FsScan, IssueSummary};
+use lastissue::source::IssueSummary;
 use lastissue::store::{Store, mbox};
 use rayon::prelude::*;
 use std::hint::black_box;
@@ -52,9 +52,8 @@ fn me() -> Identity {
 }
 
 fn load(store: &Store) -> Index {
-    let src = FsScan::new(store.clone());
     let mut ix = Index::default();
-    ix.apply(index::scan(store, &src).unwrap());
+    ix.apply(index::scan(store).unwrap());
     ix
 }
 
@@ -178,7 +177,7 @@ fn benches(c: &mut Criterion) {
             ("ready", "is:ready"),
         ] {
             g.bench_with_input(BenchmarkId::new(name, &l), &filter, |b, f| {
-                b.iter(|| black_box(view(&ix, &store, &me, f)))
+                b.iter(|| black_box(view(&ix, &store, &me, f)));
             });
         }
         g.finish();
@@ -187,7 +186,7 @@ fn benches(c: &mut Criterion) {
         slow(&mut g);
         for term in [synth::RARE, synth::COMMON] {
             g.bench_with_input(BenchmarkId::new(term, &l), &term, |b, t| {
-                b.iter(|| black_box(fulltext(&ix, t)))
+                b.iter(|| black_box(fulltext(&ix, t)));
             });
         }
         g.finish();
@@ -205,7 +204,7 @@ fn benches(c: &mut Criterion) {
             b.iter(|| {
                 let msgs = mbox::parse_mbox(bytes).unwrap();
                 black_box(model::activity(&msgs).len())
-            })
+            });
         });
     }
     g.finish();

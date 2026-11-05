@@ -1,19 +1,21 @@
 //! What the main view shows (GUI-SPEC §5): list or board, the sidebar
-//! scope, the filter text, sort and grouping, and the selected issue.
-//! Plain data; [`ViewState::compute`] evaluates it against the index with
-//! core's filter, sort and grouping. No GPUI here, so it tests directly.
+//! scope, the filter text, sort and grouping. Plain data (and its IPC
+//! shape); [`ViewState::compute`] evaluates it against the index with
+//! core's filter, sort and grouping.
 
 use super::search::{self, Candidate};
 use lastissue::identity::Identity;
 use lastissue::index::Index;
-use lastissue::model::{Priority, State};
+use lastissue::model::State;
 use lastissue::query::{self, Filter, GroupKey, Grouping, ListQuery, Sort};
 use lastissue::source::IssueSummary;
 use lastissue::store::Store;
+use serde::{Deserialize, Serialize};
 use std::collections::HashSet;
 use std::path::PathBuf;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub enum Mode {
     #[default]
     List,
@@ -21,7 +23,8 @@ pub enum Mode {
 }
 
 /// The sidebar selection.
-#[derive(Debug, Clone, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(tag = "kind", content = "project", rename_all = "camelCase")]
 pub enum Scope {
     /// Assigned to me (`@me`).
     Mine,
@@ -32,16 +35,35 @@ pub enum Scope {
     NoProject,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+/// Core's [`Sort`] over IPC (`"priority"`).
+#[derive(Serialize, Deserialize)]
+#[serde(remote = "Sort", rename_all = "camelCase")]
+enum SortDef {
+    State,
+    Created,
+    Updated,
+    Priority,
+    Due,
+}
+
+/// Core's [`Grouping`] over IPC (`"state"`).
+#[derive(Serialize, Deserialize)]
+#[serde(remote = "Grouping", rename_all = "camelCase")]
+enum GroupingDef {
+    State,
+    Priority,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ViewState {
     pub mode: Mode,
     pub scope: Scope,
     /// Filter tokens plus free text (GUI-SPEC §6).
     pub filter: String,
+    #[serde(with = "SortDef")]
     pub sort: Sort,
+    #[serde(with = "GroupingDef")]
     pub grouping: Grouping,
-    /// Short ID of the issue in the detail pane.
-    pub selected: Option<String>,
 }
 
 impl Default for ViewState {
@@ -52,7 +74,6 @@ impl Default for ViewState {
             filter: String::new(),
             sort: Sort::Priority,
             grouping: Grouping::State,
-            selected: None,
         }
     }
 }
@@ -64,37 +85,20 @@ pub struct VisibleGroup {
     pub items: Vec<PathBuf>,
 }
 
-/// A row of the grouped list.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum ListRow {
-    Header { key: GroupKey, count: usize },
-    Issue(PathBuf),
-}
-
 /// The evaluated view.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct Visible {
     pub groups: Vec<VisibleGroup>,
-    /// Flattened for the virtualized list: a header per non-empty group.
-    pub rows: Vec<ListRow>,
+    /// The list's order: indices into `groups`, non-empty ones only.
+    pub list: Vec<usize>,
     pub total: usize,
     /// The filter didn't parse or resolve (e.g. `state:nope`, `@me`
     /// without an identity); `groups` is empty then.
     pub error: Option<String>,
-    /// The filter's free-text terms (lowercased).
-    pub text: Vec<String>,
     /// Issues passing every other criterion whose text the instant tier
     /// didn't find: the full-text tier's work (GUI-SPEC §6).
     pub candidates: Vec<Candidate>,
 }
-
-pub const SORTS: [(Sort, &str); 5] = [
-    (Sort::Priority, "Priority"),
-    (Sort::Updated, "Updated"),
-    (Sort::Created, "Created"),
-    (Sort::Due, "Due"),
-    (Sort::State, "State"),
-];
 
 impl ViewState {
     /// The query the scope and filter text stand for.
@@ -143,7 +147,7 @@ impl ViewState {
             Ok(f) => f,
             Err(e) => {
                 return Visible {
-                    error: Some(error_line(&e)),
+                    error: Some(crate::format::error_line(&e)),
                     ..Visible::default()
                 };
             }
@@ -176,63 +180,20 @@ impl ViewState {
         // The list leads with active work (the CLI's state order:
         // in-progress, in-review, todo, backlog, closed); the board keeps
         // the workflow order so neighbouring columns are adjacent states.
-        let mut listed: Vec<&VisibleGroup> =
-            groups.iter().filter(|g| !g.items.is_empty()).collect();
-        listed.sort_by_key(|g| match g.key {
+        let mut list: Vec<usize> = (0..groups.len())
+            .filter(|&i| !groups[i].items.is_empty())
+            .collect();
+        list.sort_by_key(|&i| match groups[i].key {
             GroupKey::State(s) => s.sort_rank(),
             GroupKey::Priority(_) => 0,
         });
-        let mut rows = Vec::with_capacity(items.len() + groups.len());
-        for g in listed {
-            rows.push(ListRow::Header {
-                key: g.key,
-                count: g.items.len(),
-            });
-            rows.extend(g.items.iter().cloned().map(ListRow::Issue));
-        }
         Visible {
             groups,
-            rows,
+            list,
             total: items.len(),
             error: None,
-            text: filter.text.clone(),
             candidates,
         }
-    }
-}
-
-/// `invalid-state: Value: nope` → one line for the filter bar.
-fn error_line(e: &lastissue::error::Error) -> String {
-    e.to_string().lines().collect::<Vec<_>>().join(" · ")
-}
-
-/// Title-case label of a group (`In progress`, `No priority`).
-pub fn group_label(key: GroupKey) -> &'static str {
-    match key {
-        GroupKey::State(s) => state_label(s),
-        GroupKey::Priority(p) => priority_label(p),
-    }
-}
-
-pub fn state_label(s: State) -> &'static str {
-    match s {
-        State::Backlog => "Backlog",
-        State::Todo => "Todo",
-        State::InProgress => "In progress",
-        State::InReview => "In review",
-        State::Done => "Done",
-        State::Cancelled => "Cancelled",
-        State::Duplicate => "Duplicate",
-    }
-}
-
-pub fn priority_label(p: Option<Priority>) -> &'static str {
-    match p {
-        Some(Priority::Urgent) => "Urgent",
-        Some(Priority::High) => "High",
-        Some(Priority::Medium) => "Medium",
-        Some(Priority::Low) => "Low",
-        None => "No priority",
     }
 }
 
@@ -240,9 +201,8 @@ pub fn priority_label(p: Option<Priority>) -> &'static str {
 mod tests {
     use super::*;
     use lastissue::index;
-    use lastissue::model::Actor;
+    use lastissue::model::{Actor, Priority};
     use lastissue::ops::{self, NewIssue};
-    use lastissue::source::FsScan;
     use lastissue::store;
 
     struct Fx {
@@ -272,7 +232,7 @@ mod tests {
             ops::create_issue(&s, &me, &n).unwrap();
         }
         let mut ix = Index::default();
-        ix.apply(index::scan(&s, &FsScan::new(s.clone())).unwrap());
+        ix.apply(index::scan(&s).unwrap());
         Fx {
             _dir: dir,
             s,
@@ -282,13 +242,12 @@ mod tests {
     }
 
     fn titles(f: &Fx, v: &Visible) -> Vec<String> {
-        v.rows
-            .iter()
-            .map(|r| match r {
-                ListRow::Header { key, count } => format!("# {} {count}", group_label(*key)),
-                ListRow::Issue(p) => f.ix.get(p).unwrap().title.clone(),
-            })
-            .collect()
+        let mut out = Vec::new();
+        for g in v.list.iter().map(|&i| &v.groups[i]) {
+            out.push(format!("# {} {}", g.key.as_str(), g.items.len()));
+            out.extend(g.items.iter().map(|p| f.ix.get(p).unwrap().title.clone()));
+        }
+        out
     }
 
     fn sample() -> Fx {
@@ -313,9 +272,9 @@ mod tests {
         assert_eq!(
             titles(&f, &v),
             [
-                "# In progress 1",
+                "# in-progress 1",
                 "wip",
-                "# Todo 2",
+                "# todo 2",
                 "todo urgent",
                 "todo low"
             ]
@@ -333,19 +292,19 @@ mod tests {
         let v = vs.compute(&f.ix, &f.s, &f.me);
         assert_eq!(
             titles(&f, &v),
-            ["# In progress 1", "wip", "# Todo 1", "todo low"]
+            ["# in-progress 1", "wip", "# todo 1", "todo low"]
         );
 
         let pid = f.ix.projects()[0].id.clone();
         vs.scope = Scope::Project(pid);
         vs.filter = "p:urgent".into();
         let v = vs.compute(&f.ix, &f.s, &f.me);
-        assert_eq!(titles(&f, &v), ["# Todo 1", "todo urgent"]);
+        assert_eq!(titles(&f, &v), ["# todo 1", "todo urgent"]);
 
         vs.scope = Scope::NoProject;
         vs.filter = "state:done".into();
         let v = vs.compute(&f.ix, &f.s, &f.me);
-        assert_eq!(titles(&f, &v), ["# Done 1", "done"]);
+        assert_eq!(titles(&f, &v), ["# done 1", "done"]);
 
         vs.filter = "state:nope".into();
         let v = vs.compute(&f.ix, &f.s, &f.me);
@@ -353,7 +312,7 @@ mod tests {
             v.error.as_deref().unwrap().contains("invalid-state"),
             "{v:?}"
         );
-        assert!(v.rows.is_empty());
+        assert!(v.list.is_empty());
     }
 
     #[test]
@@ -364,20 +323,19 @@ mod tests {
             ..ViewState::default()
         };
         let v = vs.compute(&f.ix, &f.s, &f.me);
-        assert!(v.rows.is_empty());
+        assert!(v.list.is_empty());
         // Every issue is a candidate (a search includes closed ones).
         assert_eq!(v.candidates.len(), 4);
-        assert_eq!(v.text, ["needle"]);
         let wip = f.ix.iter().find(|s| s.title == "wip").unwrap().path.clone();
         let v = vs.compute_with(&f.ix, &f.s, &f.me, &HashSet::from([wip]));
-        assert_eq!(titles(&f, &v), ["# In progress 1", "wip"]);
+        assert_eq!(titles(&f, &v), ["# in-progress 1", "wip"]);
         // An instant match needs no scan.
         let vs = ViewState {
             filter: "urgent".into(),
             ..ViewState::default()
         };
         let v = vs.compute(&f.ix, &f.s, &f.me);
-        assert_eq!(titles(&f, &v), ["# Todo 1", "todo urgent"]);
+        assert_eq!(titles(&f, &v), ["# todo 1", "todo urgent"]);
     }
 
     #[test]
@@ -391,15 +349,15 @@ mod tests {
         let cols: Vec<(&str, usize)> = v
             .groups
             .iter()
-            .map(|g| (group_label(g.key), g.items.len()))
+            .map(|g| (g.key.as_str(), g.items.len()))
             .collect();
         assert_eq!(
             cols,
             [
-                ("Backlog", 0),
-                ("Todo", 2),
-                ("In progress", 1),
-                ("In review", 0)
+                ("backlog", 0),
+                ("todo", 2),
+                ("in-progress", 1),
+                ("in-review", 0)
             ]
         );
         vs.grouping = Grouping::Priority;
@@ -410,11 +368,11 @@ mod tests {
         assert_eq!(
             titles(&f, &v),
             [
-                "# Urgent 1",
+                "# urgent 1",
                 "todo urgent",
-                "# Low 1",
+                "# low 1",
                 "todo low",
-                "# No priority 1",
+                "# none 1",
                 "wip"
             ]
         );

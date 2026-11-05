@@ -1,9 +1,9 @@
 //! Every GUI write as plain data (GUI-SPEC §5.1, §5.2): an [`Op`] runs
 //! through core `ops` (never an ad-hoc file write) and comes back as an
 //! [`Applied`] carrying the issue's new messages and the [`Reload`] the
-//! front-end folds into its index right away, so the watcher's echo of the
-//! write is a no-op. No GPUI here: [`run`] is called on a background
-//! executor and tests call it directly.
+//! workspace folds into its index right away, so the watcher's echo of the
+//! write is a no-op. The workspace calls [`run`] off the UI thread; tests
+//! call it directly.
 
 use lastissue::error::{Error, Result};
 use lastissue::identity::Identity;
@@ -11,7 +11,6 @@ use lastissue::index::Reload;
 use lastissue::model::{Priority, State};
 use lastissue::ops::{self, CommentRef, CommentTarget, IssueUpdate, NewIssue, Outcome};
 use lastissue::query::GroupKey;
-use lastissue::source::IssueSource;
 use lastissue::store::Store;
 use lastissue::store::mbox::Msg;
 use std::path::PathBuf;
@@ -77,20 +76,31 @@ pub struct Applied {
     pub deleted: bool,
 }
 
-fn update_for(edit: &Edit) -> IssueUpdate {
+/// Apply `edit` to issue `id`; also returns the old path when it moved.
+fn update(
+    store: &Store,
+    me: &Identity,
+    id: &str,
+    edit: &Edit,
+) -> Result<(Outcome, Option<PathBuf>)> {
     let mut u = IssueUpdate::default();
-    match edit.clone() {
-        Edit::Title(t) => u.title = Some(t),
-        Edit::Body(b) => u.body = Some(b),
-        Edit::State(s) => u.state = Some(s),
-        Edit::Priority(p) => u.priority = Some(p),
-        Edit::Assignee(a) => u.assignee = Some(a),
-        Edit::AddLabel(l) => u.add_labels = vec![l],
-        Edit::RemoveLabel(l) => u.remove_labels = vec![l],
-        Edit::Due(d) => u.due = Some(d),
-        Edit::Project(_) => unreachable!("a project change is a move"),
+    match edit {
+        Edit::Project(p) => {
+            let old = store.resolve_issue(id)?.path;
+            let out = ops::move_issue(store, me, id, p.as_deref())?;
+            let moved = (out.issue.path != old).then_some(old);
+            return Ok((out, moved));
+        }
+        Edit::Title(t) => u.title = Some(t.clone()),
+        Edit::Body(b) => u.body = Some(b.clone()),
+        Edit::State(s) => u.state = Some(*s),
+        Edit::Priority(p) => u.priority = Some(*p),
+        Edit::Assignee(a) => u.assignee = Some(a.clone()),
+        Edit::AddLabel(l) => u.add_labels = vec![l.clone()],
+        Edit::RemoveLabel(l) => u.remove_labels = vec![l.clone()],
+        Edit::Due(d) => u.due = Some(d.clone()),
     }
-    u
+    Ok((ops::update_issue(store, me, id, &u)?, None))
 }
 
 fn comment_ref(store: &Store, id: &str, message_id: &str) -> Result<CommentRef> {
@@ -105,7 +115,7 @@ fn comment_ref(store: &Store, id: &str, message_id: &str) -> Result<CommentRef> 
 }
 
 /// Run `op` through core and re-read the written issue's summary.
-pub fn run(store: &Store, me: &Identity, src: &dyn IssueSource, op: &Op) -> Result<Applied> {
+pub fn run(store: &Store, me: &Identity, op: &Op) -> Result<Applied> {
     let (out, old_path): (Outcome, Option<PathBuf>) = match op {
         Op::Delete { id } => {
             let d = ops::delete_issue(store, id)?;
@@ -122,16 +132,7 @@ pub fn run(store: &Store, me: &Identity, src: &dyn IssueSource, op: &Op) -> Resu
                 deleted: true,
             });
         }
-        Op::Update {
-            id,
-            edit: Edit::Project(p),
-        } => {
-            let old = store.resolve_issue(id)?.path;
-            let out = ops::move_issue(store, me, id, p.as_deref())?;
-            let moved = (out.issue.path != old).then_some(old);
-            (out, moved)
-        }
-        Op::Update { id, edit } => (ops::update_issue(store, me, id, &update_for(edit))?, None),
+        Op::Update { id, edit } => update(store, me, id, edit)?,
         Op::Create(new) => (ops::create_issue(store, me, new)?, None),
         Op::AddComment { id, body, reply_to } => {
             let target = CommentTarget {
@@ -158,7 +159,7 @@ pub fn run(store: &Store, me: &Identity, src: &dyn IssueSource, op: &Op) -> Resu
         ),
     };
     let loaded = if out.written {
-        vec![src.load(&out.issue)?]
+        vec![lastissue::source::load(store, &out.issue)?]
     } else {
         Vec::new()
     };
@@ -204,26 +205,16 @@ pub fn neighbour(columns: &[GroupKey], current: GroupKey, step: isize) -> Option
     columns.get(j).copied()
 }
 
-/// The key a card currently sits under for a grouping.
-pub fn key_of(grouping: lastissue::query::Grouping, state: State, p: Option<Priority>) -> GroupKey {
-    match grouping {
-        lastissue::query::Grouping::State => GroupKey::State(state),
-        lastissue::query::Grouping::Priority => GroupKey::Priority(p),
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
     use lastissue::index::{self, Index};
     use lastissue::model::Actor;
-    use lastissue::source::FsScan;
     use lastissue::store;
 
     struct Fx {
         _dir: tempfile::TempDir,
         s: Store,
-        src: FsScan,
         me: Identity,
         ix: Index,
         id: String,
@@ -248,13 +239,11 @@ mod tests {
         .unwrap()
         .issue
         .id;
-        let src = FsScan::new(s.clone());
         let mut ix = Index::default();
-        ix.apply(index::scan(&s, &src).unwrap());
+        ix.apply(index::scan(&s).unwrap());
         Fx {
             _dir: dir,
             s,
-            src,
             me,
             ix,
             id,
@@ -266,7 +255,7 @@ mod tests {
             id: f.id.clone(),
             edit,
         };
-        run(&f.s, &f.me, &f.src, &op).unwrap()
+        run(&f.s, &f.me, &op).unwrap()
     }
 
     fn events(msgs: &[Msg]) -> Vec<String> {
@@ -287,7 +276,7 @@ mod tests {
         let d = f.ix.apply(a.reload.clone());
         assert_eq!(d.changed, std::slice::from_ref(&a.path));
         assert_eq!(f.ix.by_id(&f.id).unwrap().state, State::InProgress);
-        let echo = index::reload(&f.s, &f.src, std::slice::from_ref(&a.path)).unwrap();
+        let echo = index::reload(&f.s, std::slice::from_ref(&a.path)).unwrap();
         assert!(f.ix.apply(echo).is_empty());
         assert_eq!(events(&a.msgs), ["state: backlog → in-progress"]);
 
@@ -300,7 +289,7 @@ mod tests {
     fn delete_removes_the_file_and_the_index_entry() {
         let mut f = fx();
         let op = Op::Delete { id: f.id.clone() };
-        let a = run(&f.s, &f.me, &f.src, &op).unwrap();
+        let a = run(&f.s, &f.me, &op).unwrap();
         assert!(a.deleted && !a.path.exists());
         f.ix.apply(a.reload);
         assert!(f.ix.by_id(&f.id).is_none());
@@ -401,12 +390,12 @@ mod tests {
             id: f.id.clone(),
             edit: Edit::Due(Some("someday".into())),
         };
-        assert!(run(&f.s, &f.me, &f.src, &op).is_err());
+        assert!(run(&f.s, &f.me, &op).is_err());
         let op = Op::Update {
             id: f.id.clone(),
             edit: Edit::Title("  ".into()),
         };
-        assert!(run(&f.s, &f.me, &f.src, &op).is_err());
+        assert!(run(&f.s, &f.me, &op).is_err());
         assert_eq!(std::fs::read(&path).unwrap(), before);
     }
 
@@ -419,7 +408,7 @@ mod tests {
                 body: body.into(),
                 reply_to: None,
             };
-            run(&f.s, &f.me, &f.src, &op).unwrap()
+            run(&f.s, &f.me, &op).unwrap()
         };
         let a = add("First");
         let mid = a.msgs.last().unwrap().message_id().to_string();
@@ -428,7 +417,7 @@ mod tests {
             body: "Reply".into(),
             reply_to: Some(mid.clone()),
         };
-        let a = run(&f.s, &f.me, &f.src, &op).unwrap();
+        let a = run(&f.s, &f.me, &op).unwrap();
         assert_eq!(
             a.msgs.last().unwrap().get("In-Reply-To"),
             Some(mid.as_str())
@@ -439,7 +428,7 @@ mod tests {
             message_id: mid.clone(),
             body: "First, edited".into(),
         };
-        let a = run(&f.s, &f.me, &f.src, &op).unwrap();
+        let a = run(&f.s, &f.me, &op).unwrap();
         let c = a.msgs.iter().find(|m| m.message_id() == mid).unwrap();
         assert_eq!(c.body, "First, edited");
         assert!(c.has("X-Edited"));
@@ -448,7 +437,7 @@ mod tests {
             id: f.id.clone(),
             message_id: mid.clone(),
         };
-        let a = run(&f.s, &f.me, &f.src, &op).unwrap();
+        let a = run(&f.s, &f.me, &op).unwrap();
         assert!(a.msgs.iter().all(|m| m.message_id() != mid));
         assert_eq!(
             a.msgs.last().unwrap().get("X-Issue-Event"),
@@ -459,7 +448,7 @@ mod tests {
             id: f.id.clone(),
             message_id: a.msgs[0].message_id().to_string(),
         };
-        assert!(run(&f.s, &f.me, &f.src, &op).is_err());
+        assert!(run(&f.s, &f.me, &op).is_err());
     }
 
     #[test]
@@ -470,7 +459,7 @@ mod tests {
             state: Some(State::Todo),
             ..NewIssue::default()
         }));
-        let a = run(&f.s, &f.me, &f.src, &op).unwrap();
+        let a = run(&f.s, &f.me, &op).unwrap();
         f.ix.apply(a.reload);
         let s = f.ix.by_id(&a.id).unwrap();
         assert_eq!((s.title.as_str(), s.state), ("Fresh", State::Todo));

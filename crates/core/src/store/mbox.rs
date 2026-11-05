@@ -4,6 +4,7 @@
 //! bytes, canonical header order, `^>*From ` body lines get one extra `>`.
 
 use crate::error::{Error, Result};
+use crate::query::Stats;
 use chrono::{DateTime, FixedOffset};
 use mail_parser::MessageParser;
 use mail_parser::mailbox::mbox::MessageIterator;
@@ -51,7 +52,7 @@ pub struct Msg {
     pub body: String,
 }
 
-fn rank(name: &str) -> usize {
+pub(crate) fn rank(name: &str) -> usize {
     if let Some(i) = HEADER_ORDER
         .iter()
         .position(|h| h.eq_ignore_ascii_case(name))
@@ -166,7 +167,7 @@ fn from_line(msg: &Msg) -> String {
     let short = if short.is_empty() { "unknown" } else { short };
     let date = msg
         .date()
-        .unwrap_or_else(|| DateTime::from_timestamp(0, 0).unwrap().fixed_offset());
+        .unwrap_or_else(|| DateTime::UNIX_EPOCH.fixed_offset());
     format!(
         "From {short}@lastissue {}",
         date.format("%a %b %e %H:%M:%S %Y")
@@ -185,20 +186,17 @@ fn header_line(name: &str, value: &str) -> String {
     }
     let mut out = String::new();
     let mut cur = String::new();
-    let mut first = true;
     for (i, seg) in line.split(' ').enumerate() {
         let piece = if i == 0 {
             seg.to_string()
         } else {
             format!(" {seg}")
         };
-        if !first && !cur.is_empty() && cur.len() + piece.len() > MAX_LINE && !cur.trim().is_empty()
-        {
+        if cur.len() + piece.len() > MAX_LINE && !cur.trim().is_empty() {
             out.push_str(&cur);
             out.push('\n');
             cur.clear();
         }
-        first = false;
         cur.push_str(&piece);
     }
     out.push_str(&cur);
@@ -232,19 +230,9 @@ pub fn serialize(msgs: &[Msg]) -> String {
     msgs.iter().map(serialize_msg).collect()
 }
 
+/// Unfolding removes the line breaks; the following WSP is kept.
 fn unfold(raw: &str) -> String {
-    let mut out = String::with_capacity(raw.len());
-    for c in raw.chars() {
-        if c == '\r' {
-            continue;
-        }
-        if c == '\n' {
-            // Unfolding removes the line break; the following WSP is kept.
-            continue;
-        }
-        out.push(c);
-    }
-    out
+    raw.chars().filter(|c| !matches!(c, '\r' | '\n')).collect()
 }
 
 /// Parse one message (without its `From ` separator line).
@@ -308,8 +296,8 @@ pub fn read_head(reader: impl BufRead) -> Result<Msg> {
     parse_message(&buf)
 }
 
-/// Cheap line scan of a whole file: (comment count, max Date).
-pub fn scan_stats(reader: impl BufRead) -> Result<(usize, Option<DateTime<FixedOffset>>)> {
+/// Cheap line scan of a whole file: comment count and max Date.
+pub fn scan_stats(reader: impl BufRead) -> Result<Stats> {
     let mut in_headers = false;
     let mut index = 0usize;
     let mut is_event = false;
@@ -349,7 +337,7 @@ pub fn scan_stats(reader: impl BufRead) -> Result<(usize, Option<DateTime<FixedO
         }
     }
     close(index, is_event, &mut comments);
-    Ok((comments, updated))
+    Ok(Stats { comments, updated })
 }
 
 #[cfg(test)]
@@ -441,9 +429,12 @@ mod tests {
         let s = serialize(&[a.clone(), c, e]);
         let head = read_head(s.as_bytes()).unwrap();
         assert_eq!(head.headers, a.headers);
-        let (count, upd) = scan_stats(s.as_bytes()).unwrap();
-        assert_eq!(count, 1);
-        assert_eq!(upd.unwrap().to_rfc2822(), "Sun, 1 Nov 2026 10:00:00 +0100");
+        let st = scan_stats(s.as_bytes()).unwrap();
+        assert_eq!(st.comments, 1);
+        assert_eq!(
+            st.updated.unwrap().to_rfc2822(),
+            "Sun, 1 Nov 2026 10:00:00 +0100"
+        );
     }
 
     fn header_value() -> impl Strategy<Value = String> {
