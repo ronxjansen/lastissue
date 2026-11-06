@@ -1,7 +1,7 @@
 ---
 version: 1
-slug: "apps-desktop-src-app-svelte"
-primary_target: "apps/desktop/src/App.svelte"
+slug: "crates-desktop-src-app-svelte"
+primary_target: "crates/desktop/src/App.svelte"
 related_targets: []
 ---
 

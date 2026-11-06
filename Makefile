@@ -1,6 +1,6 @@
 .PHONY: build install uninstall dev bundle bench test
 
-DESKTOP := apps/desktop
+DESKTOP := crates/desktop
 
 build:
 	cargo build --release -p cli
