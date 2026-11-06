@@ -3,7 +3,6 @@
      activity and the composer. Banners cover a change on disk under an
      unsaved draft, and a draft left over from a crash. -->
 <script lang="ts">
-  import type { PickerKind } from "$lib/api";
   import { app } from "$lib/app.svelte";
   import { PRIORITY_LABEL, STATE_LABEL, dateTime } from "$lib/format";
   import { Button } from "$lib/components/ui/button";
@@ -51,11 +50,6 @@
       titleEl.style.height = `${titleEl.scrollHeight}px`;
     }
   });
-
-  function pick(picker: PickerKind) {
-    app.focus = "detail";
-    app.overlay = { kind: "picker", picker, ids: [doc.id] };
-  }
 
   const conflict = $derived(doc.title?.conflict != null || doc.body?.conflict != null);
   const hasLinks = $derived(!!doc.parent || doc.blockedBy.length > 0 || doc.related.length > 0 || doc.watchers.length > 0);
@@ -110,25 +104,25 @@
             <dt>Issue:</dt>
             <dd class="font-bold text-ink">{doc.id}</dd>
             <dt>State:</dt>
-            <dd><button class={hv} onclick={() => pick("state")}><StateIcon state={s.state} size={12} />{STATE_LABEL[s.state]}</button></dd>
+            <dd><button class={hv} onclick={() => app.pick("state")}><StateIcon state={s.state} size={12} />{STATE_LABEL[s.state]}</button></dd>
 
             <dt>From:</dt>
             <dd class="truncate pr-3 text-ink-2" title={s.author}>{s.authorName}{s.agent ? " (agent)" : ""}</dd>
             <dt>Priority:</dt>
-            <dd><button class={hv} onclick={() => pick("priority")}>{#if s.priority}<PriorityIcon priority={s.priority} size={12} />{PRIORITY_LABEL[s.priority]}{:else}<span class={unset}>none</span>{/if}</button></dd>
+            <dd><button class={hv} onclick={() => app.pick("priority")}>{#if s.priority}<PriorityIcon priority={s.priority} size={12} />{PRIORITY_LABEL[s.priority]}{:else}<span class={unset}>none</span>{/if}</button></dd>
 
             <dt>To:</dt>
-            <dd class="min-w-0 pr-3"><button class={hv} onclick={() => pick("assignee")} title={s.assignee ?? ""}><span class="truncate {s.assigneeName ? '' : unset}">{s.assigneeName ?? "unassigned"}</span></button></dd>
+            <dd class="min-w-0 pr-3"><button class={hv} onclick={() => app.pick("assignee")} title={s.assignee ?? ""}><span class="truncate {s.assigneeName ? '' : unset}">{s.assigneeName ?? "unassigned"}</span></button></dd>
             <dt>Keywords:</dt>
-            <dd class="min-w-0"><button class={hv} onclick={() => pick("labels")}><span class="truncate {s.labels.length ? '' : unset}">{s.labels.length ? s.labels.join(", ") : "none"}</span></button></dd>
+            <dd class="min-w-0"><button class={hv} onclick={() => app.pick("labels")}><span class="truncate {s.labels.length ? '' : unset}">{s.labels.length ? s.labels.join(", ") : "none"}</span></button></dd>
 
             <dt>Date:</dt>
             <dd class="truncate pr-3 text-ink-2">{s.created ? dateTime(s.created) : "unknown"}</dd>
             <dt>Due:</dt>
-            <dd><button class={hv} onclick={() => pick("due")}><span class={s.due ? "" : unset}>{s.due ? new Date(s.due).toLocaleDateString() : "none"}</span></button></dd>
+            <dd><button class={hv} onclick={() => app.pick("due")}><span class={s.due ? "" : unset}>{s.due ? new Date(s.due).toLocaleDateString() : "none"}</span></button></dd>
 
             <dt>Project:</dt>
-            <dd class="min-w-0 pr-3 @lg:col-span-3"><button class={hv} onclick={() => pick("project")}><span class="truncate {s.projectName ? '' : unset}">{s.projectName ?? "none"}</span></button></dd>
+            <dd class="min-w-0 pr-3 @lg:col-span-3"><button class={hv} onclick={() => app.pick("project")}><span class="truncate {s.projectName ? '' : unset}">{s.projectName ?? "none"}</span></button></dd>
             <dt>File:</dt>
             <dd class="break-all @lg:col-span-3" title={s.key}>{s.key}</dd>
           </dl>
@@ -151,52 +145,52 @@
         ></textarea>
 
         {#key doc.id}
-        <MarkdownEditor
-          value={doc.body?.value ?? ""}
-          reset={doc.reset}
-          editable={app.editingBody}
-          placeholder={app.editingBody ? "Add a description…" : "No description yet. Press e to write one."}
-          onclick={() => (app.editingBody = true)}
-          onchange={(md) => app.editField("body", md)}
-          onescape={() => {
-            app.editingBody = false;
-            pane?.focus();
-          }}
-          onsubmit={() => {
-            app.editingBody = false;
-            app.flushSave();
-            pane?.focus();
-          }}
-          class="mt-5 min-h-12 text-[15.5px] {app.editingBody ? '-mx-4 rounded-lg bg-paper px-4 pb-4 ring-1 ring-rule' : ''}"
-        />
-        {/key}
+          <MarkdownEditor
+            value={doc.body?.value ?? ""}
+            reset={doc.reset}
+            editable={app.editingBody}
+            placeholder={app.editingBody ? "Add a description…" : "No description yet. Press e to write one."}
+            onclick={() => (app.editingBody = true)}
+            onchange={(md) => app.editField("body", md)}
+            onescape={() => {
+              app.editingBody = false;
+              pane?.focus();
+            }}
+            onsubmit={() => {
+              app.editingBody = false;
+              app.flushSave();
+              pane?.focus();
+            }}
+            class="mt-5 min-h-12 text-[15.5px] {app.editingBody ? '-mx-4 rounded-lg bg-paper px-4 pb-4 ring-1 ring-rule' : ''}"
+          />
 
-        {#if hasLinks}
-          <h2 class="mt-14 mb-3 flex items-baseline gap-2 border-t border-rule-soft pt-6 text-[16px] font-bold text-ink"><span class="font-mono font-normal text-ink-3">§</span>Links</h2>
-          <dl class="grid grid-cols-[6.5rem_1fr] items-baseline gap-y-1 text-[14px]">
-            {#each [["Parent", doc.parent ? [doc.parent] : []], ["Blocked by", doc.blockedBy], ["Related", doc.related]] as const as [label, list] (label)}
-              {#if list.length}
-                <dt class="pt-1 text-[13px] text-ink-3">{label}</dt>
-                <dd class="flex min-w-0 flex-col">
-                  {#each list as r (r.messageId)}
-                    <button class="flex h-7 min-w-0 items-center gap-2 rounded-md px-2 -mx-2 text-left transition-colors hover:bg-wash disabled:opacity-60" disabled={!r.id} onclick={() => r.id && app.open(r.id)}>
-                      {#if r.state}<StateIcon state={r.state} />{/if}
-                      <span class="truncate text-ink">{r.title ?? r.messageId}</span>
-                      <span class="ml-auto shrink-0 font-mono text-[12px] text-ink-3">{r.id ?? "?"}</span>
-                    </button>
-                  {/each}
-                </dd>
+          {#if hasLinks}
+            <h2 class="mt-14 mb-3 flex items-baseline gap-2 border-t border-rule-soft pt-6 text-[16px] font-bold text-ink"><span class="font-mono font-normal text-ink-3">§</span>Links</h2>
+            <dl class="grid grid-cols-[6.5rem_1fr] items-baseline gap-y-1 text-[14px]">
+              {#each [["Parent", doc.parent ? [doc.parent] : []], ["Blocked by", doc.blockedBy], ["Related", doc.related]] as const as [label, list] (label)}
+                {#if list.length}
+                  <dt class="pt-1 text-[13px] text-ink-3">{label}</dt>
+                  <dd class="flex min-w-0 flex-col">
+                    {#each list as r (r.messageId)}
+                      <button class="flex h-7 min-w-0 items-center gap-2 rounded-md px-2 -mx-2 text-left transition-colors hover:bg-wash disabled:opacity-60" disabled={!r.id} onclick={() => r.id && app.open(r.id)}>
+                        {#if r.state}<StateIcon state={r.state} />{/if}
+                        <span class="truncate text-ink">{r.title ?? r.messageId}</span>
+                        <span class="ml-auto shrink-0 font-mono text-[12px] text-ink-3">{r.id ?? "?"}</span>
+                      </button>
+                    {/each}
+                  </dd>
+                {/if}
+              {/each}
+              {#if doc.watchers.length}
+                <dt class="pt-1 text-[13px] text-ink-3">Watching</dt>
+                <dd class="truncate pt-1 text-ink-2">{doc.watchers.join(", ")}</dd>
               {/if}
-            {/each}
-            {#if doc.watchers.length}
-              <dt class="pt-1 text-[13px] text-ink-3">Watching</dt>
-              <dd class="truncate pt-1 text-ink-2">{doc.watchers.join(", ")}</dd>
-            {/if}
-          </dl>
-        {/if}
+            </dl>
+          {/if}
 
-        <h2 class="mt-14 mb-4 flex items-baseline gap-2 border-t border-rule-soft pt-6 text-[16px] font-bold text-ink"><span class="font-mono font-normal text-ink-3">§</span>Activity</h2>
-        {#key doc.id}<Activity items={doc.activity} />{/key}
+          <h2 class="mt-14 mb-4 flex items-baseline gap-2 border-t border-rule-soft pt-6 text-[16px] font-bold text-ink"><span class="font-mono font-normal text-ink-3">§</span>Activity</h2>
+          <Activity items={doc.activity} />
+        {/key}
       </article>
     {/if}
   </div>

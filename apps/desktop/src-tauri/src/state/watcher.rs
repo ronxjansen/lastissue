@@ -1,5 +1,5 @@
-//! Filesystem watcher for the open repo: `notify` on the
-//! issues root, debounced on its own thread into [`Batch`]es of changed
+//! Filesystem watcher for the open repo (and the keymap file): `notify` on
+//! the issues root, debounced on its own thread into [`Batch`]es of changed
 //! paths. What a batch means is decided in core (`index::reload`): issue
 //! files are re-read and diffed (an in-place rewrite of the last event is
 //! just another change), structural changes trigger a full rescan.
@@ -84,13 +84,14 @@ pub fn debounce<E>(
     }
 }
 
-/// Watches one root while alive; dropping it stops the debounce thread.
-pub struct RepoWatcher {
+/// Watches one directory while alive; dropping it stops the debounce
+/// thread.
+pub struct Watcher {
     _watcher: notify::RecommendedWatcher,
 }
 
 /// Start watching `root` recursively. Batches arrive on the receiver.
-pub fn watch(root: &Path) -> notify::Result<(RepoWatcher, mpsc::Receiver<Batch>)> {
+pub fn watch(root: &Path) -> notify::Result<(Watcher, mpsc::Receiver<Batch>)> {
     let (raw_tx, raw_rx) = mpsc::channel();
     let mut watcher = notify::recommended_watcher(raw_tx)?;
     watcher.watch(root, RecursiveMode::Recursive)?;
@@ -99,7 +100,7 @@ pub fn watch(root: &Path) -> notify::Result<(RepoWatcher, mpsc::Receiver<Batch>)
         .name("lastissue-watch".into())
         .spawn(move || debounce(&raw_rx, &tx, QUIET, MAX_DELAY, Batch::add))
         .map_err(notify::Error::io)?;
-    Ok((RepoWatcher { _watcher: watcher }, rx))
+    Ok((Watcher { _watcher: watcher }, rx))
 }
 
 #[cfg(test)]

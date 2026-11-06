@@ -123,7 +123,9 @@ fn list(ctx: &mut Ctx, a: ListArgs) -> Result<()> {
     }
     let page = query::list(&ctx.store, &ctx.me, &q)?;
     let root = format::block(&[("X-Root", ctx.store.root.display().to_string())]);
-    let next = page.next_offset.map(|n| format::block(&[("X-Next", format!("--offset {n}"))]));
+    let next = page
+        .next_offset
+        .map(|n| format::block(&[("X-Next", format!("--offset {n}"))]));
     if a.brief {
         let mut out = root;
         for row in &page.rows {

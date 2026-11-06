@@ -521,16 +521,8 @@ impl ListQuery {
     pub fn apply(&mut self, tokens: &[Token]) {
         for t in tokens {
             match t {
-                Token::State(s) => {
-                    if !self.states.contains(s) {
-                        self.states.push(*s);
-                    }
-                }
-                Token::Priority(p) => {
-                    if !self.priorities.contains(p) {
-                        self.priorities.push(*p);
-                    }
-                }
+                Token::State(s) => model::push_unique(&mut self.states, *s),
+                Token::Priority(p) => model::push_unique(&mut self.priorities, *p),
                 Token::Label(l) => self.labels.push(l.clone()),
                 Token::Assignee(w) => self.assignee = Some(w.clone()),
                 Token::Project(p) => {

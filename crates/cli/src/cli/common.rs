@@ -42,7 +42,10 @@ impl Ctx {
             format::block(&[
                 ("Warning", "no-identity"),
                 ("Using", &addr),
-                ("Hint", "set --from, LASTISSUE_FROM or git config user.email"),
+                (
+                    "Hint",
+                    "set --from, LASTISSUE_FROM or git config user.email"
+                ),
             ])
         );
     }

@@ -53,7 +53,7 @@ pub mod events {
 
 pub struct Hub {
     ws: Mutex<Workspace>,
-    pub sink: Arc<dyn Sink>,
+    sink: Arc<dyn Sink>,
 }
 
 pub type SharedHub = Arc<Hub>;
@@ -71,14 +71,10 @@ impl Hub {
     }
 
     fn emit(&self, event: &str, payload: &impl Serialize) {
-        emit(&*self.sink, event, payload);
-    }
-}
-
-fn emit(sink: &dyn Sink, event: &str, payload: &impl Serialize) {
-    match serde_json::to_value(payload) {
-        Ok(v) => sink.emit(event, v),
-        Err(e) => eprintln!("lastissue-gui: cannot encode {event}: {e}"),
+        match serde_json::to_value(payload) {
+            Ok(v) => self.sink.emit(event, v),
+            Err(e) => eprintln!("lastissue-gui: cannot encode {event}: {e}"),
+        }
     }
 }
 
@@ -94,7 +90,7 @@ pub struct RepoModel {
     pub loaded: bool,
     pub errors: BTreeMap<PathBuf, String>,
     pub failure: Option<String>,
-    _watcher: Option<watcher::RepoWatcher>,
+    _watcher: Option<watcher::Watcher>,
 }
 
 impl RepoModel {

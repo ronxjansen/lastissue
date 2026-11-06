@@ -84,13 +84,14 @@ pub fn options(
             let mut out = vec![opt("No assignee", has(None), Edit::Assignee(None))];
             let mut seen = Vec::new();
             if let Some(me) = me {
-                seen.push(model::email_of(me));
+                let e = model::email_of(me);
                 out.push(PickOption {
                     label: format!("{} (me)", display_name(me)),
-                    detail: Some(model::email_of(me)),
-                    checked: has(Some(model::email_of(me).as_str())),
+                    detail: Some(e.clone()),
+                    checked: has(Some(&e)),
                     edit: Edit::Assignee(Some("me".into())),
                 });
+                seen.push(e);
             }
             let mut people: Vec<&str> = ix
                 .iter()
@@ -103,6 +104,7 @@ pub fn options(
                 .filter(|a| !a.is_empty())
                 .collect();
             people.sort_unstable();
+            people.dedup();
             for p in people {
                 let e = model::email_of(p);
                 if seen.contains(&e) {
@@ -182,28 +184,21 @@ pub fn typed(kind: PickerKind, query: &str, targets: &[&IssueSummary]) -> Option
             if !targets.is_empty() && targets.iter().all(|s| s.labels.contains(&l)) {
                 return None;
             }
-            Some(PickOption {
-                label: format!("Add label “{l}”"),
-                detail: None,
-                checked: false,
-                edit: Edit::AddLabel(l),
-            })
+            Some(opt(format!("Add label “{l}”"), false, Edit::AddLabel(l)))
         }
-        PickerKind::Assignee if q.contains('@') => Some(PickOption {
-            label: format!("Assign to {q}"),
-            detail: None,
-            checked: false,
-            edit: Edit::Assignee(Some(q.to_string())),
-        }),
+        PickerKind::Assignee if q.contains('@') => Some(opt(
+            format!("Assign to {q}"),
+            false,
+            Edit::Assignee(Some(q.to_string())),
+        )),
         PickerKind::Due => {
             let today = chrono::Local::now().date_naive();
             let day = lastissue::dates::parse_day(q, today)?;
-            Some(PickOption {
-                label: format!("Due {}", day.format("%a %b %-d, %Y")),
-                detail: None,
-                checked: false,
-                edit: Edit::Due(Some(day.format("%Y-%m-%d").to_string())),
-            })
+            Some(opt(
+                format!("Due {}", day.format("%a %b %-d, %Y")),
+                false,
+                Edit::Due(Some(day.format("%Y-%m-%d").to_string())),
+            ))
         }
         _ => None,
     }

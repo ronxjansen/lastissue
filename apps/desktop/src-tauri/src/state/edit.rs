@@ -24,8 +24,10 @@ use std::path::PathBuf;
 pub enum Edit {
     Title(String),
     Body(String),
-    State(#[serde(with = "crate::dto::state_str")] State),
-    Priority(#[serde(with = "crate::dto::priority_str")] Option<Priority>),
+    #[serde(with = "crate::dto::state_str")]
+    State(State),
+    #[serde(with = "crate::dto::priority_str")]
+    Priority(Option<Priority>),
     /// An address or `me`; `None` unassigns.
     Assignee(Option<String>),
     AddLabel(String),

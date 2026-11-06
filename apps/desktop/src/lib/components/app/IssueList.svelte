@@ -1,6 +1,6 @@
 <script lang="ts">
   import { app } from "$lib/app.svelte";
-  import { groupKeyId, groupLabel } from "$lib/format";
+  import { groupLabel } from "$lib/format";
   import GroupIcon from "./GroupIcon.svelte";
   import IssueRow from "./IssueRow.svelte";
   import VirtualList from "./VirtualList.svelte";
@@ -25,7 +25,7 @@
   <VirtualList items={rows} rowHeight={40} scrollTo={cursorRow} class="h-full">
     {#snippet row(r)}
       {#if r.kind === "header"}
-        <div class="flex h-full items-end gap-2 border-b border-rule bg-paper pb-2 pl-11 text-[12.5px] font-bold text-ink-2" data-group={groupKeyId(r.key)}>
+        <div class="flex h-full items-end gap-2 border-b border-rule bg-paper pb-2 pl-11 text-[12.5px] font-bold text-ink-2">
           <GroupIcon key={r.key} />
           {groupLabel(r.key)}
           <span class="font-mono text-[12px] font-normal text-ink-3">{r.count}</span>

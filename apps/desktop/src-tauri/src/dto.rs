@@ -37,7 +37,9 @@ pub fn parse_priority(s: Option<&str>) -> Result<Option<Priority>, String> {
     }
 }
 
-/// `#[serde(with)]` for a [`State`] as its canonical name.
+/// `#[serde(with)]` for a [`State`] as its canonical name (serde fixes the
+/// by-reference signatures).
+#[allow(clippy::trivially_copy_pass_by_ref)]
 pub mod state_str {
     use super::{State, parse_state};
     use serde::{Deserialize as _, Deserializer, Serializer};
@@ -53,6 +55,7 @@ pub mod state_str {
 
 /// `#[serde(with)]` for an optional [`Priority`] (`null`, `"none"` or
 /// `""` for none).
+#[allow(clippy::trivially_copy_pass_by_ref, clippy::ref_option)]
 pub mod priority_str {
     use super::{Priority, parse_priority};
     use serde::{Deserialize as _, Deserializer, Serialize as _, Serializer};
@@ -178,10 +181,17 @@ impl From<&Repo> for RepoDto {
 
 /// Core's [`GroupKey`] over IPC: `{kind: "state", value: "todo"}`.
 #[derive(Serialize, Deserialize)]
-#[serde(remote = "GroupKey", tag = "kind", content = "value", rename_all = "camelCase")]
+#[serde(
+    remote = "GroupKey",
+    tag = "kind",
+    content = "value",
+    rename_all = "camelCase"
+)]
 pub enum GroupKeyDef {
-    State(#[serde(with = "state_str")] State),
-    Priority(#[serde(with = "priority_str")] Option<Priority>),
+    #[serde(with = "state_str")]
+    State(State),
+    #[serde(with = "priority_str")]
+    Priority(Option<Priority>),
 }
 
 /// A [`GroupKey`] as a command argument.
@@ -507,8 +517,12 @@ impl DocDto {
             summary: s.map(|s| SummaryDto::new(&r.store, s)),
             watchers,
             parent: s.and_then(|s| s.parent.as_ref()).map(rel),
-            blocked_by: s.map(|s| s.blocked_by.iter().map(rel).collect()).unwrap_or_default(),
-            related: s.map(|s| s.related.iter().map(rel).collect()).unwrap_or_default(),
+            blocked_by: s
+                .map(|s| s.blocked_by.iter().map(rel).collect())
+                .unwrap_or_default(),
+            related: s
+                .map(|s| s.related.iter().map(rel).collect())
+                .unwrap_or_default(),
             activity: d.msgs.as_deref().map(activity).unwrap_or_default(),
             link: Some(r.link(d.id.clone())),
         })
@@ -602,5 +616,52 @@ impl Snapshot {
             search: SearchDto::new(ws),
             keymap,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::state::edit::Edit;
+    use serde_json::{from_value, json, to_value};
+
+    #[test]
+    fn edits_and_group_keys_keep_their_ipc_shape() {
+        for (e, j) in [
+            (
+                Edit::State(State::InProgress),
+                json!({"kind": "state", "value": "in-progress"}),
+            ),
+            (
+                Edit::Priority(Some(Priority::High)),
+                json!({"kind": "priority", "value": "high"}),
+            ),
+            (
+                Edit::Priority(None),
+                json!({"kind": "priority", "value": null}),
+            ),
+            (
+                Edit::AddLabel("x".into()),
+                json!({"kind": "addLabel", "value": "x"}),
+            ),
+            (Edit::Due(None), json!({"kind": "due", "value": null})),
+        ] {
+            assert_eq!(to_value(&e).unwrap(), j);
+            assert_eq!(from_value::<Edit>(j).unwrap(), e);
+        }
+        let none: Edit = from_value(json!({"kind": "priority", "value": "none"})).unwrap();
+        assert_eq!(none, Edit::Priority(None));
+        assert!(from_value::<Edit>(json!({"kind": "state", "value": "nope"})).is_err());
+
+        let g = GroupDto {
+            key: GroupKey::State(State::Todo),
+            items: Vec::new(),
+        };
+        assert_eq!(
+            to_value(&g).unwrap(),
+            json!({"key": {"kind": "state", "value": "todo"}, "items": []})
+        );
+        let GroupKeyArg(k) = from_value(json!({"kind": "priority", "value": null})).unwrap();
+        assert_eq!(k, GroupKey::Priority(None));
     }
 }

@@ -152,14 +152,10 @@ impl ViewState {
                 };
             }
         };
-        let blockers = filter.blockers(index.iter());
         let mut items: Vec<&IssueSummary> = Vec::new();
         let mut candidates = Vec::new();
-        for s in index.iter() {
-            if !filter.matches_summary_fields(s, &blockers) {
-                continue;
-            }
-            match search::classify(s, &filter.text) {
+        for (s, r) in search::classify_all(index, &filter) {
+            match r {
                 Ok(_) => items.push(s),
                 Err(c) => {
                     if fulltext.contains(&s.path) {

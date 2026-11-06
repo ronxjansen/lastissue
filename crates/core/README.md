@@ -2,20 +2,16 @@
 
 The library behind every front-end (lib name `lastissue`, so code reads
 `use lastissue::ops`). It owns the file format, the data model and every
-operation on issues. This file is the contract: what is on disk and what each
-operation means. Front-ends document only how they expose it.
+operation on issues. 
 
 ## Principles
 
-- **The file is the truth.** No database, index or cache on disk. Nothing
+- **The file is the source of truth.** No database, index or cache on disk. Nothing
   derived is ever stored.
 - **Real mail.** Every file is valid mbox and opens in `mutt -f`. Standard RFC
   headers keep their real meaning wherever one fits.
 - **Plaintext and greppable.** Raw UTF-8 headers, no folding, no body
   encoding.
-- **No surprises.** No prompts, auto-commits or auto-expiry, and no writes
-  outside the issues root, except that `init` records its root in the repo
-  registry.
 - **No concurrency machinery.** No locks, no merge driver. Writes are atomic
   (temp file, then rename) only so a crash cannot corrupt a file.
 

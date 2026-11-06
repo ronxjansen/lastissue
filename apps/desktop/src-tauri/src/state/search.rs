@@ -98,19 +98,27 @@ pub struct Prepared {
 }
 
 pub fn prepare(index: &Index, filter: &Filter) -> Prepared {
-    let blockers = filter.blockers(index.iter());
     let mut out = Prepared::default();
-    for s in index.iter() {
-        if !filter.matches_summary_fields(s, &blockers) {
-            continue;
-        }
-        match classify(s, &filter.text) {
+    for (_, r) in classify_all(index, filter) {
+        match r {
             Ok(h) => out.hits.push(h),
             Err(c) => out.candidates.push(c),
         }
     }
     rank(&mut out.hits);
     out
+}
+
+/// [`classify`] every summary that passes the filter's other criteria.
+pub fn classify_all<'a>(
+    index: &'a Index,
+    filter: &'a Filter,
+) -> impl Iterator<Item = (&'a IssueSummary, Result<Hit, Candidate>)> {
+    let blockers = filter.blockers(index.iter());
+    index
+        .iter()
+        .filter(move |s| filter.matches_summary_fields(s, &blockers))
+        .map(|s| (s, classify(s, &filter.text)))
 }
 
 /// The free-text terms compiled for the scan, one matcher per term (so

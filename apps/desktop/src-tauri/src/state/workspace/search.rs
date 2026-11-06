@@ -1,7 +1,7 @@
 //! The `/` search box and the filter bar's full-text tier: instant
 //! results under the lock, then debounced background scans in batches.
 
-use super::{SharedHub, Sink, Workspace, emit, events, recompute};
+use super::{SharedHub, Workspace, events, recompute};
 use crate::dto::{SearchDto, VisibleDto};
 use crate::format::error_line;
 use crate::state::search::{self, Candidate, FullText, Hit};
@@ -50,11 +50,10 @@ pub fn set_search(hub: &SharedHub, query: &str) {
     };
     let prepared = match (&ws.repo, query.trim().is_empty()) {
         (Some(r), false) => {
-            let filter = (|| {
-                let mut q = ListQuery::default();
-                q.filter(query)?;
-                Filter::resolve(&r.store, &ws.identity, &q)
-            })();
+            let mut q = ListQuery::default();
+            let filter = q
+                .filter(query)
+                .and_then(|()| Filter::resolve(&r.store, &ws.identity, &q));
             match filter {
                 Ok(f) => Some((search::prepare(&r.index, &f), f.text)),
                 Err(e) => {
@@ -73,18 +72,18 @@ pub fn set_search(hub: &SharedHub, query: &str) {
                 hub,
                 prepared.candidates,
                 terms,
-                move |ws, sink, _paths, hits| {
+                move |hub, ws, _paths, hits| {
                     if ws.search.generation != generation {
                         return false;
                     }
                     search::merge(&mut ws.search.hits, hits);
-                    emit(sink, events::SEARCH, &SearchDto::new(ws));
+                    hub.emit(events::SEARCH, &SearchDto::new(ws));
                     true
                 },
-                move |ws, sink| {
+                move |hub, ws| {
                     if ws.search.generation == generation {
                         ws.search.scanning = false;
-                        emit(sink, events::SEARCH, &SearchDto::new(ws));
+                        hub.emit(events::SEARCH, &SearchDto::new(ws));
                     }
                 },
             );
@@ -100,8 +99,8 @@ fn spawn_scan(
     hub: &SharedHub,
     cands: Vec<Candidate>,
     terms: Vec<String>,
-    batch: impl Fn(&mut Workspace, &dyn Sink, Vec<PathBuf>, Vec<Hit>) -> bool + Send + 'static,
-    done: impl FnOnce(&mut Workspace, &dyn Sink) + Send + 'static,
+    batch: impl Fn(&SharedHub, &mut Workspace, Vec<PathBuf>, Vec<Hit>) -> bool + Send + 'static,
+    done: impl FnOnce(&SharedHub, &mut Workspace) + Send + 'static,
 ) {
     let hub = hub.clone();
     std::thread::spawn(move || {
@@ -114,7 +113,7 @@ fn spawn_scan(
             let paths = cands[start..end].iter().map(|c| c.path.clone()).collect();
             {
                 let mut ws = hub.lock();
-                if !batch(&mut ws, &*hub.sink, paths, hits) {
+                if !batch(&hub, &mut ws, paths, hits) {
                     return;
                 }
             }
@@ -122,7 +121,7 @@ fn spawn_scan(
             size = (size * 2).min(MAX_BATCH);
         }
         let mut ws = hub.lock();
-        done(&mut ws, &*hub.sink);
+        done(&hub, &mut ws);
     });
 }
 
@@ -144,13 +143,11 @@ pub(super) fn scan_filter_text(hub: &SharedHub, ws: &mut Workspace) {
     }
     let (generation, terms) = (ft.generation, ft.terms.clone());
     ws.filter_text.running = true;
-    let hub2 = hub.clone();
-    let hub3 = hub.clone();
     spawn_scan(
         hub,
         todo,
         terms,
-        move |ws, _, paths, hits| {
+        move |hub, ws, paths, hits| {
             if ws.filter_text.generation != generation {
                 return false;
             }
@@ -158,15 +155,15 @@ pub(super) fn scan_filter_text(hub: &SharedHub, ws: &mut Workspace) {
             let any = !hits.is_empty();
             ws.filter_text.hits.extend(hits.into_iter().map(|h| h.path));
             if any {
-                recompute(&hub2, ws, false);
+                recompute(hub, ws, false);
             }
             true
         },
-        move |ws, _| {
+        move |hub, ws| {
             if ws.filter_text.generation == generation {
                 ws.filter_text.running = false;
                 // Candidates may have grown meanwhile (scope change).
-                recompute(&hub3, ws, true);
+                recompute(hub, ws, true);
             }
         },
     );

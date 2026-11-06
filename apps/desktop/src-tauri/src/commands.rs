@@ -19,7 +19,7 @@ type Res<T = ()> = Result<T, String>;
 /// The user keymap as last loaded, and its file watcher.
 pub struct Keymap {
     pub current: Mutex<UserKeymap>,
-    pub _watcher: Option<notify::RecommendedWatcher>,
+    pub _watcher: Option<crate::state::watcher::Watcher>,
 }
 
 pub fn handler() -> impl Fn(tauri::ipc::Invoke) -> bool + Send + Sync + 'static {
@@ -52,7 +52,11 @@ pub fn handler() -> impl Fn(tauri::ipc::Invoke) -> bool + Send + Sync + 'static 
 
 #[tauri::command]
 async fn snapshot(hub: Hub<'_>, keymap: State<'_, Keymap>) -> Res<Snapshot> {
-    let km = keymap.current.lock().map_err(|e| e.to_string())?.clone();
+    let km = keymap
+        .current
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .clone();
     Ok(Snapshot::new(&hub.lock(), km))
 }
 

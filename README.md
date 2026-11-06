@@ -1,29 +1,12 @@
 # lastissue
 
-A local, plaintext issue tracker. Each issue is one mbox file in your repo's
-`issues/` folder, and the file is the truth: no database, no server. Git
-syncs the files, `grep` searches them, `mutt -f` opens them, and people and AI
-agents edit them through the same CLI.
+A local, plaintext issue tracker, optimized for LLM usage. Lastissue is both a Desktop application and a CLI that share the same state. Each issue is one mbox file in your repo's `issues/` folder. There is no database, no server. 
 
 ```sh
 lastissue init
 lastissue issue create --title "Login crashes on empty password" --label bug
 lastissue issue list --filter "is:ready @me"
 ```
-
-## Workspace
-
-| Path | Package | What it is |
-|---|---|---|
-| [`crates/core`](crates/core/README.md) | `lastissue-core` (lib `lastissue`) | File format, data model and every operation. The contract. |
-| [`crates/cli`](crates/cli/README.md) | `cli` (bin `lastissue`) | Command-line front-end, for people and agents. |
-| [`apps/desktop`](apps/desktop/README.md) | `desktop` (bin `lastissue-gui`) | Tauri + Svelte desktop app. |
-
-Both front-ends link the core library and never touch issue files any other
-way, so they share one set of semantics. Neither shells out to the other.
-
-`DESIGN.md` holds the desktop app's visual design; `PRODUCT.md` holds its
-product intent.
 
 ## Build
 

@@ -6,7 +6,7 @@
 //! without lookups.
 
 use super::{Source, SourceKind, str_of};
-use crate::model::{self, Priority, State};
+use crate::model::{self, Priority, State, push_unique};
 use crate::store::mbox::{self, Msg};
 use chrono::{DateTime, NaiveDate};
 use serde_json::Value;
@@ -178,12 +178,6 @@ fn body(issue: &Value) -> String {
     b
 }
 
-fn push_unique(v: &mut Vec<String>, s: String) {
-    if !v.contains(&s) {
-        v.push(s);
-    }
-}
-
 /// Map one fully-fetched Linear issue node.
 pub fn issue(node: &Value, src: &Source) -> Mapped {
     let ulid = node_ulid(node);
@@ -229,15 +223,10 @@ pub fn issue(node: &Value, src: &Source) -> Mapped {
     {
         labels.push(p);
     }
-    let watchers: Vec<String> = {
-        let mut w = Vec::new();
-        for s in nodes(&node["subscribers"]) {
-            if let Some(a) = address(s) {
-                push_unique(&mut w, a);
-            }
-        }
-        w
-    };
+    let mut watchers = Vec::new();
+    for a in nodes(&node["subscribers"]).iter().filter_map(address) {
+        push_unique(&mut watchers, a);
+    }
 
     let mut m = Msg::default();
     m.set("Message-ID", &issue_mid);
@@ -295,13 +284,9 @@ fn comment_author(c: &Value) -> String {
 /// Comments in creation order; threads become In-Reply-To / References.
 fn comments(node: &Value, issue_mid: &str, title: &str) -> Vec<Msg> {
     let mut cs: Vec<&Value> = nodes(&node["comments"]).iter().collect();
-    cs.sort_by(|a, b| {
-        let key = |c: &Value| {
-            DateTime::parse_from_rfc3339(c["createdAt"].as_str().unwrap_or(""))
-                .map(|d| d.timestamp_millis())
-                .unwrap_or(0)
-        };
-        key(a).cmp(&key(b))
+    cs.sort_by_key(|c| {
+        DateTime::parse_from_rfc3339(c["createdAt"].as_str().unwrap_or(""))
+            .map_or(0, |d| d.timestamp_millis())
     });
     let mut out: Vec<Msg> = Vec::new();
     for c in cs {

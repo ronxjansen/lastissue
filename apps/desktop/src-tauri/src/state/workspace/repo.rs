@@ -75,15 +75,10 @@ pub fn open_repo(hub: &SharedHub, repo: Repo) -> std::result::Result<(), String>
         .unwrap_or_else(|_| repo.root.clone());
     let store = Store::new(root);
     let mut ws = hub.lock();
-    let watching = if ws.watch {
-        watcher::watch(&store.root)
-    } else {
-        Err(notify::Error::generic("not watched"))
-    };
-    let (w, rx, failure) = match watching {
-        Ok((w, rx)) => (Some(w), Some(rx), None),
-        Err(e) if ws.watch => (None, None, Some(format!("not watching: {e}"))),
-        Err(_) => (None, None, None),
+    let (w, rx, failure) = match ws.watch.then(|| watcher::watch(&store.root)) {
+        Some(Ok((w, rx))) => (Some(w), Some(rx), None),
+        Some(Err(e)) => (None, None, Some(format!("not watching: {e}"))),
+        None => (None, None, None),
     };
     ws.repo_generation += 1;
     let generation = ws.repo_generation;
@@ -168,7 +163,8 @@ pub(super) fn apply(hub: &SharedHub, generation: u64, r: Result<Reload>, own: bo
             return true;
         }
     };
-    let full = matches!(r, Reload::Full { .. });
+    let first = !repo.loaded;
+    let full = first || matches!(r, Reload::Full { .. });
     match &r {
         Reload::Full { .. } => repo.errors.clear(),
         Reload::Paths { loaded, gone, .. } => {
@@ -180,7 +176,6 @@ pub(super) fn apply(hub: &SharedHub, generation: u64, r: Result<Reload>, own: bo
     for e in r.errors() {
         repo.errors.insert(e.path.clone(), e.message.clone());
     }
-    let first = !repo.loaded;
     repo.loaded = true;
     let delta = repo.index.apply(r);
     if !first && delta.is_empty() {
@@ -188,8 +183,8 @@ pub(super) fn apply(hub: &SharedHub, generation: u64, r: Result<Reload>, own: bo
     }
     let store = repo.store.clone();
     let index_delta = IndexDelta {
-        full: full || first,
-        changed: if full || first {
+        full,
+        changed: if full {
             repo.index
                 .iter()
                 .map(|s| SummaryDto::new(&store, s))

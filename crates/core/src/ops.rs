@@ -12,7 +12,9 @@
 use crate::dates;
 use crate::error::{Error, Result};
 use crate::identity::Identity;
-use crate::model::{self, Actor, Change, Priority, State, list_of, set_list, state_of};
+use crate::model::{
+    self, Actor, Change, Priority, State, list_of, push_unique, set_list, state_of,
+};
 use crate::query::contains_lower;
 use crate::store::mbox::{self, Msg};
 use crate::store::{self, IssueRef, Project, Store};
@@ -67,10 +69,7 @@ fn relation_target(store: &Store, id: &str, own: Option<&str>) -> Result<String>
 fn relation_targets(store: &Store, ids: &[String], own: Option<&str>) -> Result<Vec<String>> {
     let mut out = Vec::new();
     for id in ids {
-        let mid = relation_target(store, id, own)?;
-        if !out.contains(&mid) {
-            out.push(mid);
-        }
+        push_unique(&mut out, relation_target(store, id, own)?);
     }
     Ok(out)
 }
@@ -284,10 +283,7 @@ pub fn create_issue(store: &Store, me: &Identity, new: &NewIssue) -> Result<Outc
     let assignee = new.assignee.as_deref().map(|w| me.who(w)).transpose()?;
     let mut watchers = Vec::new();
     for w in &new.watchers {
-        let w = me.who(w)?;
-        if !watchers.contains(&w) {
-            watchers.push(w);
-        }
+        push_unique(&mut watchers, me.who(w)?);
     }
     let due = new.due.as_deref().map(date).transpose()?;
     let expires = new.expires.as_deref().map(date).transpose()?;
@@ -394,16 +390,8 @@ pub fn update_issue(store: &Store, me: &Identity, id: &str, u: &IssueUpdate) -> 
         .iter()
         .map(|w| me.who_pattern(w))
         .collect::<Result<_>>()?;
-    let add_blocked: Vec<String> = u
-        .add_blocked_by
-        .iter()
-        .map(|b| relation_target(store, b, Some(&own)))
-        .collect::<Result<_>>()?;
-    let add_related: Vec<String> = u
-        .add_related
-        .iter()
-        .map(|b| relation_target(store, b, Some(&own)))
-        .collect::<Result<_>>()?;
+    let add_blocked = relation_targets(store, &u.add_blocked_by, Some(&own))?;
+    let add_related = relation_targets(store, &u.add_related, Some(&own))?;
 
     let m = &mut msgs[0];
     if let Some(t) = &u.title {
@@ -457,9 +445,7 @@ pub fn update_issue(store: &Store, me: &Identity, id: &str, u: &IssueUpdate) -> 
         }
         let mut cur = list_of(m, header);
         for x in add {
-            if !cur.contains(x) {
-                cur.push(x.clone());
-            }
+            push_unique(&mut cur, x.clone());
         }
         for id in remove {
             match removal_target(store, id, &cur) {
@@ -603,10 +589,10 @@ pub fn move_issue(
         .file_name()
         .ok_or_else(|| Error::validation("invalid-path").with("Path", store.rel(&r.path)))?
         .to_owned();
-    let dir = target
+    let new_path = target
         .as_ref()
-        .map_or_else(|| store.root.clone(), |p| p.dir.clone());
-    let new_path = dir.join(file_name);
+        .map_or(&store.root, |p| &p.dir)
+        .join(file_name);
     msgs[0].set_opt("List-Id", target.as_ref().map(Project::list_id).as_deref());
     if new_path == r.path && before == msgs[0] {
         return Ok(unchanged(r, msgs));
@@ -667,14 +653,12 @@ impl CommentRef {
     }
 }
 
-fn comment_ref_hint() -> &'static str {
-    "address a comment as <issue>/<n> (n from 1, see: lastissue comment list <issue>) or by Message-ID prefix"
-}
+const COMMENT_REF_HINT: &str = "address a comment as <issue>/<n> (n from 1, see: lastissue comment list <issue>) or by Message-ID prefix";
 
 fn invalid_comment_ref(q: &str) -> Error {
     Error::usage("invalid-comment-ref")
         .with("Value", q)
-        .with("Hint", comment_ref_hint())
+        .with("Hint", COMMENT_REF_HINT)
 }
 
 /// Resolve `<issue>/<n>`, or a comment Message-ID (ULID) prefix.
@@ -735,7 +719,7 @@ pub fn find_comment(store: &Store, q: &str) -> Result<CommentRef> {
     match hits.len() {
         0 => Err(Error::not_found("comment-not-found")
             .with("Comment", q)
-            .with("Hint", comment_ref_hint())),
+            .with("Hint", COMMENT_REF_HINT)),
         1 => Ok(hits.remove(0).0),
         _ => Err(Error::ambiguous(hits.into_iter().map(|h| h.1).collect())),
     }

@@ -9,7 +9,7 @@
 //! { "issues": { "shift-x": "toggleSelect", "x": null } }
 //! ```
 
-use notify::{RecursiveMode, Watcher as _};
+use crate::state::watcher::{self, Watcher};
 use serde::Serialize;
 use std::path::{Path, PathBuf};
 
@@ -71,27 +71,24 @@ pub fn load(path: Option<&Path>) -> UserKeymap {
 pub fn watch(
     path: PathBuf,
     changed: impl Fn(UserKeymap) + Send + 'static,
-) -> notify::Result<notify::RecommendedWatcher> {
+) -> notify::Result<Watcher> {
     let dir = path.parent().map(Path::to_path_buf).unwrap_or_default();
     std::fs::create_dir_all(&dir).map_err(notify::Error::io)?;
-    let (tx, rx) = std::sync::mpsc::channel();
-    let mut w = notify::recommended_watcher(tx)?;
-    w.watch(&dir, RecursiveMode::NonRecursive)?;
+    let (w, rx) = watcher::watch(&dir)?;
     std::thread::Builder::new()
         .name("lastissue-keymap".into())
         .spawn(move || {
             let mut last = load(Some(&path));
-            while let Ok(ev) = rx.recv() {
-                let ev: notify::Result<notify::Event> = ev;
-                let hit = ev.map_or(true, |e| {
-                    e.paths.iter().any(|p| p.file_name() == path.file_name())
-                });
+            // Ends when the watcher is dropped.
+            for batch in rx {
+                let hit = batch.rescan
+                    || batch
+                        .paths
+                        .iter()
+                        .any(|p| p.file_name() == path.file_name());
                 if !hit {
                     continue;
                 }
-                // Editors save in bursts; let it settle.
-                std::thread::sleep(std::time::Duration::from_millis(50));
-                while rx.try_recv().is_ok() {}
                 let km = load(Some(&path));
                 if km != last {
                     last.clone_from(&km);

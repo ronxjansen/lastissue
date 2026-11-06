@@ -68,17 +68,15 @@ impl Delta {
     }
 }
 
-fn load_error(path: &Path, e: &crate::error::Error) -> LoadError {
-    LoadError {
-        path: path.to_path_buf(),
-        message: e.to_string(),
-    }
-}
-
 fn load_all(store: &Store, refs: &[IssueRef]) -> (Vec<IssueSummary>, Vec<LoadError>) {
     let results: Vec<_> = refs
         .par_iter()
-        .map(|r| source::load(store, r).map_err(|e| load_error(&r.path, &e)))
+        .map(|r| {
+            source::load(store, r).map_err(|e| LoadError {
+                path: r.path.clone(),
+                message: e.to_string(),
+            })
+        })
         .collect();
     let mut ok = Vec::with_capacity(results.len());
     let mut errors = Vec::new();
@@ -183,7 +181,7 @@ impl Index {
             Reload::Full {
                 issues, projects, ..
             } => {
-                let mut next: BTreeMap<PathBuf, IssueSummary> =
+                let next: BTreeMap<PathBuf, IssueSummary> =
                     issues.into_iter().map(|s| (s.path.clone(), s)).collect();
                 d.removed = self
                     .issues
@@ -197,7 +195,7 @@ impl Index {
                     }
                 }
                 d.projects = self.projects != projects;
-                std::mem::swap(&mut self.issues, &mut next);
+                self.issues = next;
                 self.projects = projects;
                 self.ids.clear();
                 self.mids.clear();

@@ -344,7 +344,7 @@ class App {
 
   // ---------------------------------------------------------- actions
 
-  private pick(picker: PickerKind) {
+  pick(picker: PickerKind) {
     const ids = this.targets();
     if (ids.length) this.overlay = { kind: "picker", picker, ids };
   }

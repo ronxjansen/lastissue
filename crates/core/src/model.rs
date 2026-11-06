@@ -165,14 +165,21 @@ impl Priority {
 
 // ---------------------------------------------------------------- Lists
 
+/// Append `x` unless `v` already has it.
+pub(crate) fn push_unique<T: PartialEq>(v: &mut Vec<T>, x: T) {
+    if !v.contains(&x) {
+        v.push(x);
+    }
+}
+
 /// Labels: split on commas, trimmed, lowercase, deduplicated, order kept.
 pub fn normalize_labels<'a>(inputs: impl IntoIterator<Item = &'a str>) -> Vec<String> {
     let mut out: Vec<String> = Vec::new();
     for raw in inputs {
         for l in raw.split(',') {
             let l = l.trim().to_lowercase();
-            if !l.is_empty() && !out.contains(&l) {
-                out.push(l);
+            if !l.is_empty() {
+                push_unique(&mut out, l);
             }
         }
     }
