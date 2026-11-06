@@ -3,7 +3,7 @@ Message-ID: <01M6E9QTSG0YBZEDM148HEM7TD@lastissue>
 Date: Mon, 2 Nov 2026 15:13:46 +0100
 From: Ron Jansen <ronxjansen@gmail.com>
 Subject: M0: Workspace split (core/cli/gui)
-X-Issue-State: todo
+X-Issue-State: done
 Keywords: gui, refactor
 List-Id: gui <t8kn8q.lastissue>
 X-Parent: <01M6E0ZQH7HXSTPPB4PTB7H9FP@lastissue>
@@ -24,4 +24,18 @@ Content-Type: text/markdown; charset=utf-8
 Content-Transfer-Encoding: 8bit
 
 parent: (none) → <01M6E0ZQH7HXSTPPB4PTB7H9FP@lastissue>
+
+From pbkwjs@lastissue Fri Nov  6 10:38:14 2026
+Message-ID: <01M6R3J6K28WFTX86HYXPBKWJS@lastissue>
+Date: Fri, 6 Nov 2026 10:38:14 +0100
+From: Ron Jansen <ronxjansen@gmail.com>
+Sender: Claude Code <claude@agent>
+Subject: Re: M0: Workspace split (core/cli/gui)
+In-Reply-To: <01M6E9QTSG0YBZEDM148HEM7TD@lastissue>
+References: <01M6E9QTSG0YBZEDM148HEM7TD@lastissue>
+X-Issue-Event: update
+Content-Type: text/markdown; charset=utf-8
+Content-Transfer-Encoding: 8bit
+
+state: todo → done
 

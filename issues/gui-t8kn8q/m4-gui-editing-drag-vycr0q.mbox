@@ -3,7 +3,7 @@ Message-ID: <01M6E9QTWNYZC0H2NSEKVYCR0Q@lastissue>
 Date: Mon, 2 Nov 2026 15:13:46 +0100
 From: Ron Jansen <ronxjansen@gmail.com>
 Subject: M4: GUI editing, drag and drop, saving
-X-Issue-State: todo
+X-Issue-State: done
 Keywords: gui
 List-Id: gui <t8kn8q.lastissue>
 X-Parent: <01M6E0ZQH7HXSTPPB4PTB7H9FP@lastissue>
@@ -38,4 +38,17 @@ Content-Type: text/markdown; charset=utf-8
 Content-Transfer-Encoding: 8bit
 
 parent: (none) → <01M6E0ZQH7HXSTPPB4PTB7H9FP@lastissue>
+
+From 2vxa6s@lastissue Fri Nov  6 10:36:11 2026
+Message-ID: <01M6R3EEDFJYZ3YPPMXN2VXA6S@lastissue>
+Date: Fri, 6 Nov 2026 10:36:11 +0100
+From: Ron Jansen <ronxjansen@gmail.com>
+Subject: Re: M4: GUI editing, drag and drop, saving
+In-Reply-To: <01M6E9QTWNYZC0H2NSEKVYCR0Q@lastissue>
+References: <01M6E9QTWNYZC0H2NSEKVYCR0Q@lastissue>
+X-Issue-Event: update
+Content-Type: text/markdown; charset=utf-8
+Content-Transfer-Encoding: 8bit
+
+state: todo → done
 

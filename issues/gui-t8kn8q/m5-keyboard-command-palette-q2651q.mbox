@@ -3,7 +3,7 @@ Message-ID: <01M6E9QTXEJHR88MPY5GQ2651Q@lastissue>
 Date: Mon, 2 Nov 2026 15:13:46 +0100
 From: Ron Jansen <ronxjansen@gmail.com>
 Subject: M5: Keyboard, command palette, search
-X-Issue-State: todo
+X-Issue-State: done
 Keywords: gui
 List-Id: gui <t8kn8q.lastissue>
 X-Parent: <01M6E0ZQH7HXSTPPB4PTB7H9FP@lastissue>
@@ -38,4 +38,18 @@ Content-Type: text/markdown; charset=utf-8
 Content-Transfer-Encoding: 8bit
 
 parent: (none) → <01M6E0ZQH7HXSTPPB4PTB7H9FP@lastissue>
+
+From 0vnbj3@lastissue Fri Nov  6 10:38:14 2026
+Message-ID: <01M6R3J6PBQNX5NTADH60VNBJ3@lastissue>
+Date: Fri, 6 Nov 2026 10:38:14 +0100
+From: Ron Jansen <ronxjansen@gmail.com>
+Sender: Claude Code <claude@agent>
+Subject: Re: M5: Keyboard, command palette, search
+In-Reply-To: <01M6E9QTXEJHR88MPY5GQ2651Q@lastissue>
+References: <01M6E9QTXEJHR88MPY5GQ2651Q@lastissue>
+X-Issue-Event: update
+Content-Type: text/markdown; charset=utf-8
+Content-Transfer-Encoding: 8bit
+
+state: todo → done
 

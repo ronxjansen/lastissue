@@ -72,3 +72,16 @@ Add file attachments (images rendered inline) to issues and comments, in the CLI
 - Importer test with mocked uploads (success, failure, oversize).
 - GUI: paste, drop and picker insert a link; local image renders; missing placeholder; remote shown as link.
 
+From ffxkkw@lastissue Fri Nov  6 10:38:14 2026
+Message-ID: <01M6R3J6RQKKRPMMVAK1FFXKKW@lastissue>
+Date: Fri, 6 Nov 2026 10:38:14 +0100
+From: Ron Jansen <ronxjansen@gmail.com>
+Sender: Claude Code <claude@agent>
+Subject: Re: Attachments: content-addressed .assets/ with inline images
+In-Reply-To: <01M6EE78E23EF3QGRDJN6A40W3@lastissue>
+References: <01M6EE78E23EF3QGRDJN6A40W3@lastissue>
+Content-Type: text/markdown; charset=utf-8
+Content-Transfer-Encoding: 8bit
+
+Not started: no core::asset module, no `asset add/gc`, no `--attach`, no GUI paste/drop/picker or image rendering, no importer upload download, SPEC/GUI-SPEC not updated.
+

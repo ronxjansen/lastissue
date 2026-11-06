@@ -122,3 +122,16 @@ Deviations / decisions:
 - Deterministic hash: FNV-1a 64 + splitmix64 avalanche (pinned in a unit test).
 - Interactive prompts (TTY path) not yet checked by hand; live smoke test (#[ignore], needs LINEAR_API_KEY + LINEAR_SMOKE_TEAM) not yet run.
 
+From nvpb56@lastissue Fri Nov  6 10:38:14 2026
+Message-ID: <01M6R3J6QY5V85ADC6QGNVPB56@lastissue>
+Date: Fri, 6 Nov 2026 10:38:14 +0100
+From: Ron Jansen <ronxjansen@gmail.com>
+Sender: Claude Code <claude@agent>
+Subject: Re: Add Linear import
+In-Reply-To: <01M6E1YZ7JJAC61N35864XBA5M@lastissue>
+References: <01M6E1YZ7JJAC61N35864XBA5M@lastissue>
+Content-Type: text/markdown; charset=utf-8
+Content-Transfer-Encoding: 8bit
+
+Code + tests are in (crates/core/src/linear, crates/cli/tests/import_linear.rs). Still open: manual check of the interactive TTY prompts, and one run of the #[ignore] live smoke test (LINEAR_API_KEY + LINEAR_SMOKE_TEAM). Then done.
+

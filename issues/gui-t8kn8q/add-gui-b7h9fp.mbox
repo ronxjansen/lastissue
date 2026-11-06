@@ -3,7 +3,7 @@ Message-ID: <01M6E0ZQH7HXSTPPB4PTB7H9FP@lastissue>
 Date: Mon, 2 Nov 2026 12:40:48 +0100
 From: Ron Jansen <ronxjansen@gmail.com>
 Subject: Add GUI
-X-Issue-State: backlog
+X-Issue-State: done
 List-Id: gui <t8kn8q.lastissue>
 X-Edited: Mon, 2 Nov 2026 15:13:39 +0100
 Content-Type: text/markdown; charset=utf-8
@@ -24,4 +24,17 @@ Content-Transfer-Encoding: 8bit
 
 project: (none) → gui <t8kn8q.lastissue>
 path: add-gui-b7h9fp.mbox → gui-t8kn8q/add-gui-b7h9fp.mbox
+
+From y9vzvt@lastissue Fri Nov  6 10:35:51 2026
+Message-ID: <01M6R3DTXPXPVXN2HV24Y9VZVT@lastissue>
+Date: Fri, 6 Nov 2026 10:35:51 +0100
+From: Ron Jansen <ronxjansen@gmail.com>
+Subject: Re: Add GUI
+In-Reply-To: <01M6E0ZQH7HXSTPPB4PTB7H9FP@lastissue>
+References: <01M6E0ZQH7HXSTPPB4PTB7H9FP@lastissue>
+X-Issue-Event: update
+Content-Type: text/markdown; charset=utf-8
+Content-Transfer-Encoding: 8bit
+
+state: backlog → done
 

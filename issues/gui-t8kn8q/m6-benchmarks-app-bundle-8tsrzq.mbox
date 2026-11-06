@@ -39,3 +39,16 @@ Content-Transfer-Encoding: 8bit
 
 parent: (none) → <01M6E0ZQH7HXSTPPB4PTB7H9FP@lastissue>
 
+From xcfxne@lastissue Fri Nov  6 10:38:14 2026
+Message-ID: <01M6R3J6SFG7J43DGBEMXCFXNE@lastissue>
+Date: Fri, 6 Nov 2026 10:38:14 +0100
+From: Ron Jansen <ronxjansen@gmail.com>
+Sender: Claude Code <claude@agent>
+Subject: Re: M6: Benchmarks, app bundle, URL scheme
+In-Reply-To: <01M6E9QTY7N01HB2K6XQ8TSRZQ@lastissue>
+References: <01M6E9QTY7N01HB2K6XQ8TSRZQ@lastissue>
+Content-Type: text/markdown; charset=utf-8
+Content-Transfer-Encoding: 8bit
+
+Done: criterion benches (scan/view/fulltext/by_id/activity, 10k/100k), `make bundle` (.app + .dmg), `lastissue://` deep link. Still open: record the perf numbers in docs/GUI-SPEC.md, and code signing + notarization.
+

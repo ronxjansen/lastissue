@@ -3,7 +3,7 @@ Message-ID: <01M6E9QTT9KX947DNMRMBJKF1T@lastissue>
 Date: Mon, 2 Nov 2026 15:13:46 +0100
 From: Ron Jansen <ronxjansen@gmail.com>
 Subject: M1: Extract core ops, query, search, identity
-X-Issue-State: todo
+X-Issue-State: done
 Keywords: gui, refactor
 List-Id: gui <t8kn8q.lastissue>
 X-Parent: <01M6E0ZQH7HXSTPPB4PTB7H9FP@lastissue>
@@ -38,4 +38,18 @@ Content-Type: text/markdown; charset=utf-8
 Content-Transfer-Encoding: 8bit
 
 parent: (none) → <01M6E0ZQH7HXSTPPB4PTB7H9FP@lastissue>
+
+From 61cf4e@lastissue Fri Nov  6 10:38:14 2026
+Message-ID: <01M6R3J6KY4X4E5FKN5561CF4E@lastissue>
+Date: Fri, 6 Nov 2026 10:38:14 +0100
+From: Ron Jansen <ronxjansen@gmail.com>
+Sender: Claude Code <claude@agent>
+Subject: Re: M1: Extract core ops, query, search, identity
+In-Reply-To: <01M6E9QTT9KX947DNMRMBJKF1T@lastissue>
+References: <01M6E9QTT9KX947DNMRMBJKF1T@lastissue>
+X-Issue-Event: update
+Content-Type: text/markdown; charset=utf-8
+Content-Transfer-Encoding: 8bit
+
+state: todo → done
 

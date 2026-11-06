@@ -3,7 +3,7 @@ Message-ID: <01M6E9QTV1H5S9HNP937AKVAV6@lastissue>
 Date: Mon, 2 Nov 2026 15:13:46 +0100
 From: Ron Jansen <ronxjansen@gmail.com>
 Subject: M2: Event coalescing, filter tokens, --no-events
-X-Issue-State: todo
+X-Issue-State: done
 Keywords: gui, core
 List-Id: gui <t8kn8q.lastissue>
 X-Parent: <01M6E0ZQH7HXSTPPB4PTB7H9FP@lastissue>
@@ -38,4 +38,18 @@ Content-Type: text/markdown; charset=utf-8
 Content-Transfer-Encoding: 8bit
 
 parent: (none) → <01M6E0ZQH7HXSTPPB4PTB7H9FP@lastissue>
+
+From 34gp3q@lastissue Fri Nov  6 10:38:14 2026
+Message-ID: <01M6R3J6MP1VXDPE54QZ34GP3Q@lastissue>
+Date: Fri, 6 Nov 2026 10:38:14 +0100
+From: Ron Jansen <ronxjansen@gmail.com>
+Sender: Claude Code <claude@agent>
+Subject: Re: M2: Event coalescing, filter tokens, --no-events
+In-Reply-To: <01M6E9QTV1H5S9HNP937AKVAV6@lastissue>
+References: <01M6E9QTV1H5S9HNP937AKVAV6@lastissue>
+X-Issue-Event: update
+Content-Type: text/markdown; charset=utf-8
+Content-Transfer-Encoding: 8bit
+
+state: todo → done
 
