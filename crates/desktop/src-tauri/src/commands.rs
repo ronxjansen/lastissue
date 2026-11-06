@@ -184,12 +184,11 @@ async fn open_repo(hub: Hub<'_>, index: usize) -> Res {
     ws::open_repo(&hub, repo)
 }
 
-/// Register a folder (its issues root is found as the CLI would) and open it.
+/// Register a folder (a root, or a dir containing `issues/`) and open it.
 #[tauri::command]
 async fn add_repo(hub: Hub<'_>, path: String) -> Res {
-    let root = lastissue::store::discover(Some(std::path::Path::new(&path)))
-        .map_err(|e| error_line(&e))?;
-    let repo = lastissue::registry::add(&root).map_err(|e| error_line(&e))?;
+    let repo =
+        lastissue::registry::add(std::path::Path::new(&path)).map_err(|e| error_line(&e))?;
     hub.lock().repos = lastissue::registry::load().map_err(|e| error_line(&e))?;
     ws::open_repo(&hub, repo)
 }
