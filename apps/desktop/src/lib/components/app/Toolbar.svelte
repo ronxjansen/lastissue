@@ -28,11 +28,13 @@
 
   let input: HTMLInputElement | undefined = $state();
 
+  const seg = "h-6 min-w-7 rounded-[5px] text-ink-3 data-[state=on]:bg-sheet data-[state=on]:text-ink data-[state=on]:shadow-[0_1px_2px_oklch(0_0_0/0.08)]";
+
   const title = $derived.by(() => {
     const s = app.view.scope;
     if (s.kind === "mine") return "My issues";
     if (s.kind === "noProject") return "No project";
-    if (s.kind === "project") return app.projects.find((p) => p.id === s.project)?.name ?? "Project";
+    if (s.kind === "project") return app.currentProject?.name ?? "Project";
     return "All issues";
   });
 </script>
@@ -49,8 +51,8 @@
     value={app.view.mode}
     onValueChange={(v) => v && app.setView({ mode: v as "list" | "board" })}
   >
-    <ToggleGroup.Item value="list" aria-label="List (g l)" class="h-6 min-w-7 rounded-[5px] text-ink-3 data-[state=on]:bg-sheet data-[state=on]:text-ink data-[state=on]:shadow-[0_1px_2px_oklch(0_0_0/0.08)]"><List class="size-3.5" /></ToggleGroup.Item>
-    <ToggleGroup.Item value="board" aria-label="Board (g b)" class="h-6 min-w-7 rounded-[5px] text-ink-3 data-[state=on]:bg-sheet data-[state=on]:text-ink data-[state=on]:shadow-[0_1px_2px_oklch(0_0_0/0.08)]"><Columns3 class="size-3.5" /></ToggleGroup.Item>
+    <ToggleGroup.Item value="list" aria-label="List (g l)" class={seg}><List class="size-3.5" /></ToggleGroup.Item>
+    <ToggleGroup.Item value="board" aria-label="Board (g b)" class={seg}><Columns3 class="size-3.5" /></ToggleGroup.Item>
   </ToggleGroup.Root>
   </div>
 

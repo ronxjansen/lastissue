@@ -1,9 +1,9 @@
-<!-- The issue detail pane (GUI-SPEC §5): inline title and body editing
+<!-- The issue detail pane: inline title and body editing
      (saved on a debounce through Rust), property pickers, relations,
      activity and the composer. Banners cover a change on disk under an
      unsaved draft, and a draft left over from a crash. -->
 <script lang="ts">
-  import type { PickerKind, Relation } from "$lib/api";
+  import type { PickerKind } from "$lib/api";
   import { app } from "$lib/app.svelte";
   import { PRIORITY_LABEL, STATE_LABEL, dateTime } from "$lib/format";
   import { Button } from "$lib/components/ui/button";
@@ -57,11 +57,7 @@
     app.overlay = { kind: "picker", picker, ids: [doc.id] };
   }
 
-  function rel(r: Relation) {
-    if (r.id) app.open(r.id);
-  }
-
-  const conflict = $derived((doc.title?.conflict ?? null) !== null || (doc.body?.conflict ?? null) !== null);
+  const conflict = $derived(doc.title?.conflict != null || doc.body?.conflict != null);
   const hasLinks = $derived(!!doc.parent || doc.blockedBy.length > 0 || doc.related.length > 0 || doc.watchers.length > 0);
   // Properties read as a byline: quiet text until hovered, never boxed.
   const hv = "-mx-1.5 inline-flex h-6 max-w-full items-center gap-1.5 rounded px-1.5 text-ink-2 transition-colors duration-100 hover:bg-wash hover:text-ink";
@@ -183,7 +179,7 @@
                 <dt class="pt-1 text-[13px] text-ink-3">{label}</dt>
                 <dd class="flex min-w-0 flex-col">
                   {#each list as r (r.messageId)}
-                    <button class="flex h-7 min-w-0 items-center gap-2 rounded-md px-2 -mx-2 text-left transition-colors hover:bg-wash disabled:opacity-60" disabled={!r.id} onclick={() => rel(r)}>
+                    <button class="flex h-7 min-w-0 items-center gap-2 rounded-md px-2 -mx-2 text-left transition-colors hover:bg-wash disabled:opacity-60" disabled={!r.id} onclick={() => r.id && app.open(r.id)}>
                       {#if r.state}<StateIcon state={r.state} />{/if}
                       <span class="truncate text-ink">{r.title ?? r.messageId}</span>
                       <span class="ml-auto shrink-0 font-mono text-[12px] text-ink-3">{r.id ?? "?"}</span>

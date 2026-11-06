@@ -1,6 +1,6 @@
 //! mboxrd reading (via `mail-parser`) and writing (own serializer).
 //!
-//! Byte-level rules (§2.5): LF only, raw UTF-8 headers, no folding below 998
+//! Byte-level rules: LF only, raw UTF-8 headers, no folding below 998
 //! bytes, canonical header order, `^>*From ` body lines get one extra `>`.
 
 use crate::error::{Error, Result};

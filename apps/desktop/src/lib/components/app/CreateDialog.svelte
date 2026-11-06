@@ -1,4 +1,4 @@
-<!-- New issue (GUI-SPEC §5.2): written only on submit (⌘↵), so no
+<!-- New issue: written only on submit (⌘↵), so no
      half-made files. Defaults follow the current scope. -->
 <script lang="ts">
   import type { Priority, State } from "$lib/api";
@@ -53,7 +53,7 @@
   const selectClass = "h-8 rounded-md border border-transparent bg-wash px-2.5 text-[13px] text-ink-2 outline-none transition-colors hover:bg-wash-strong focus:border-rule focus:bg-sheet";
 </script>
 
-<Dialog.Root open={true} onOpenChange={(o) => o || (app.overlay = null)}>
+<Dialog.Root open onOpenChange={(o) => o || (app.overlay = null)}>
   <!-- svelte-ignore a11y_no_static_element_interactions -->
   <Dialog.Content class="sm:max-w-2xl" onkeydown={keydown}>
     <Dialog.Header>

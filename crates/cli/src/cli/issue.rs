@@ -9,11 +9,15 @@ use lastissue::ops::{self, CloseAs, IssueUpdate, NewIssue};
 use lastissue::query::{self, ListQuery};
 
 pub fn run(ctx: &mut Ctx, cmd: IssueCmd) -> Result<()> {
-    match cmd {
-        IssueCmd::Create(a) => create(ctx, *a),
-        IssueCmd::List(a) => list(ctx, *a),
-        IssueCmd::Show { id, no_events } => show(ctx, &id, no_events),
-        IssueCmd::Update(a) => update(ctx, *a),
+    let (store, me) = (&ctx.store, &ctx.me);
+    let o = match cmd {
+        IssueCmd::Create(a) => ops::create_issue(store, me, &new_issue(*a)?)?,
+        IssueCmd::List(a) => return list(ctx, *a),
+        IssueCmd::Show { id, no_events } => return show(ctx, &id, no_events),
+        IssueCmd::Update(a) => {
+            let id = a.id.clone();
+            ops::update_issue(store, me, &id, &issue_update(*a)?)?
+        }
         IssueCmd::Close {
             id,
             cancel,
@@ -25,37 +29,28 @@ pub fn run(ctx: &mut Ctx, cmd: IssueCmd) -> Result<()> {
                 None if cancel => CloseAs::Cancelled,
                 None => CloseAs::Done,
             };
-            ops::close_issue(&ctx.store, &ctx.me, &id, &how, comment.as_deref())
-                .map(|o| print_outcome(ctx, &o))
+            ops::close_issue(store, me, &id, &how, comment.as_deref())?
         }
-        IssueCmd::Reopen { id } => {
-            ops::reopen_issue(&ctx.store, &ctx.me, &id).map(|o| print_outcome(ctx, &o))
-        }
+        IssueCmd::Reopen { id } => ops::reopen_issue(store, me, &id)?,
         IssueCmd::Move {
             id,
             project,
             no_project,
         } => {
             let target = if no_project { None } else { project };
-            ops::move_issue(&ctx.store, &ctx.me, &id, target.as_deref())
-                .map(|o| print_outcome(ctx, &o))
+            ops::move_issue(store, me, &id, target.as_deref())?
         }
-        IssueCmd::Delete { id } => delete(ctx, &id),
-    }
-}
-
-fn print_outcome(ctx: &mut Ctx, o: &ops::Outcome) {
+        IssueCmd::Delete { id } => return delete(ctx, &id),
+    };
     ctx.print_indices(&o.issue, &o.msgs, &o.shown());
+    Ok(())
 }
 
-// ---------------------------------------------------------------- create
-
-fn create(ctx: &mut Ctx, a: CreateArgs) -> Result<()> {
-    let body = common::optional_body(&a.body)?;
-    let new = NewIssue {
+fn new_issue(a: CreateArgs) -> Result<NewIssue> {
+    Ok(NewIssue {
         title: a.title,
         project: a.project,
-        body,
+        body: common::given_body(&a.body)?.unwrap_or_default(),
         state: a.state,
         priority: a.priority,
         labels: a.label,
@@ -67,10 +62,35 @@ fn create(ctx: &mut Ctx, a: CreateArgs) -> Result<()> {
         blocked_by: a.blocked_by,
         related: a.relate,
         headers: a.header,
-    };
-    let o = ops::create_issue(&ctx.store, &ctx.me, &new)?;
-    print_outcome(ctx, &o);
-    Ok(())
+    })
+}
+
+fn issue_update(a: UpdateArgs) -> Result<IssueUpdate> {
+    Ok(IssueUpdate {
+        title: a.title,
+        body: common::explicit_body(&a.body)?,
+        state: a.state,
+        priority: set_or_clear(a.priority, a.no_priority),
+        add_labels: a.add_label,
+        remove_labels: a.remove_label,
+        assignee: set_or_clear(a.assign, a.unassign),
+        watch: a.watch,
+        unwatch: a.unwatch,
+        due: set_or_clear(a.due, a.no_due),
+        expires: set_or_clear(a.expires, a.no_expires),
+        parent: set_or_clear(a.parent, a.no_parent),
+        add_blocked_by: a.blocked_by,
+        remove_blocked_by: a.unblock,
+        add_related: a.relate,
+        remove_related: a.unrelate,
+        headers: a.header,
+    })
+}
+
+/// clap makes each set/unset flag pair exclusive: `Some(None)` = unset.
+#[allow(clippy::option_option, reason = "IssueUpdate's set/unset fields")]
+fn set_or_clear<T>(v: Option<T>, clear: bool) -> Option<Option<T>> {
+    if clear { Some(None) } else { v.map(Some) }
 }
 
 // ---------------------------------------------------------------- list
@@ -102,34 +122,29 @@ fn list(ctx: &mut Ctx, a: ListArgs) -> Result<()> {
         q.filter(f)?;
     }
     let page = query::list(&ctx.store, &ctx.me, &q)?;
-    let next_page = page.next_offset.map(|n| format!("--offset {n}"));
-
-    let root = ctx.store.root.display().to_string();
+    let root = format::block(&[("X-Root", ctx.store.root.display().to_string())]);
+    let next = page.next_offset.map(|n| format::block(&[("X-Next", format!("--offset {n}"))]));
     if a.brief {
-        let mut out = format::block(&[("X-Root".into(), root)]);
+        let mut out = root;
         for row in &page.rows {
             out.push_str(&format::brief(&row.issue, &row.head, ctx.color));
         }
-        if let Some(n) = next_page {
-            out.push_str(&format::block(&[("X-Next".into(), n)]));
-        }
+        out.extend(next);
         ctx.print(&out);
         return Ok(());
     }
 
-    let mut blocks: Vec<String> = vec![format::block(&[("X-Root".into(), root)])];
+    let mut blocks = vec![root];
     for row in &page.rows {
-        let mut fields: Vec<(String, String)> = vec![
+        let mut fields = vec![
             ("Message-ID".into(), row.head.message_id().to_string()),
             ("X-Short-Id".into(), row.issue.id.clone()),
         ];
-        for (k, v) in row.head.ordered_headers() {
-            let lk = k.to_ascii_lowercase();
-            if lk == "message-id" || lk == "content-type" || lk == "content-transfer-encoding" {
-                continue;
-            }
-            fields.push((k, v));
-        }
+        fields.extend(row.head.ordered_headers().into_iter().filter(|(k, _)| {
+            !["Message-ID", "Content-Type", "Content-Transfer-Encoding"]
+                .iter()
+                .any(|h| h.eq_ignore_ascii_case(k))
+        }));
         if let Some(st) = &row.stats {
             fields.push(("X-Comment-Count".into(), st.comments.to_string()));
             if let Some(u) = st.updated {
@@ -145,12 +160,8 @@ fn list(ctx: &mut Ctx, a: ListArgs) -> Result<()> {
         fields.push(("X-Path".into(), ctx.store.rel(&row.issue.path)));
         blocks.push(format::block(&fields));
     }
-    if let Some(n) = next_page {
-        blocks.push(format::block(&[("X-Next".into(), n)]));
-    }
-    let text = blocks.join("\n");
-    let painted = format::paint(&text, ctx.color, true);
-    ctx.print(&painted);
+    blocks.extend(next);
+    ctx.paint(&blocks.join("\n"), true);
     Ok(())
 }
 
@@ -179,59 +190,22 @@ fn show(ctx: &mut Ctx, id: &str, no_events: bool) -> Result<()> {
             &format::comment_headers(&r, head, a),
         ));
     }
-    let painted = format::paint(&out, ctx.color, false);
-    ctx.print(&painted);
+    ctx.paint(&out, false);
     Ok(())
-}
-
-// ---------------------------------------------------------------- update
-
-fn update(ctx: &mut Ctx, a: UpdateArgs) -> Result<()> {
-    let body = common::explicit_body(&a.body)?;
-    let u = IssueUpdate {
-        title: a.title,
-        body,
-        state: a.state,
-        priority: set_or_clear(a.priority, a.no_priority),
-        add_labels: a.add_label,
-        remove_labels: a.remove_label,
-        assignee: set_or_clear(a.assign, a.unassign),
-        watch: a.watch,
-        unwatch: a.unwatch,
-        due: set_or_clear(a.due, a.no_due),
-        expires: set_or_clear(a.expires, a.no_expires),
-        parent: set_or_clear(a.parent, a.no_parent),
-        add_blocked_by: a.blocked_by,
-        remove_blocked_by: a.unblock,
-        add_related: a.relate,
-        remove_related: a.unrelate,
-        headers: a.header,
-    };
-    let o = ops::update_issue(&ctx.store, &ctx.me, &a.id, &u)?;
-    print_outcome(ctx, &o);
-    Ok(())
-}
-
-/// clap makes each set/unset flag pair exclusive: `Some(None)` = unset.
-#[allow(clippy::option_option, reason = "IssueUpdate's set/unset fields")]
-fn set_or_clear<T>(v: Option<T>, clear: bool) -> Option<Option<T>> {
-    if clear { Some(None) } else { v.map(Some) }
 }
 
 // ---------------------------------------------------------------- delete
 
 fn delete(ctx: &mut Ctx, id: &str) -> Result<()> {
     let d = ops::delete_issue(&ctx.store, id)?;
-    let mut fields = vec![
-        ("Message-ID".to_string(), d.head.message_id().to_string()),
-        (
-            "Subject".to_string(),
-            d.head.get("Subject").unwrap_or("").to_string(),
-        ),
-    ];
-    fields.extend(ctx.ident(&d.issue).map(|(k, v)| (k.to_string(), v)));
-    fields.push(("X-Deleted".to_string(), "yes".to_string()));
-    let text = format::paint(&format::block(&fields), ctx.color, true);
-    ctx.print(&text);
+    let [short, path] = ctx.ident(&d.issue);
+    let text = format::block(&[
+        ("Message-ID", d.head.message_id().to_string()),
+        ("Subject", d.head.get("Subject").unwrap_or("").to_string()),
+        short,
+        path,
+        ("X-Deleted", "yes".into()),
+    ]);
+    ctx.paint(&text, true);
     Ok(())
 }

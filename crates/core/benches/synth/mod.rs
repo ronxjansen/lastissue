@@ -1,4 +1,4 @@
-//! Synthetic issue stores for the scale benchmarks (GUI-SPEC §3, §11 M6).
+//! Synthetic issue stores for the scale benchmarks.
 //!
 //! Deterministic: the same `n` always yields the same files. Stores are
 //! cached under [`base_dir`] (`LASTISSUE_BENCH_DIR`, else cargo's per-target

@@ -39,7 +39,7 @@ fn main() {
     std::process::exit(code);
 }
 
-/// Explicit root (§2.1): `--root` | `--repo` (clap rejects both), then
+/// Explicit root: `--root` | `--repo` (clap rejects both), then
 /// `LASTISSUE_DIR`. None means walk up, then the global root.
 fn explicit_root(root: Option<&Path>, repo: Option<&str>) -> Result<Option<PathBuf>> {
     if let Some(r) = root {
@@ -84,11 +84,11 @@ fn run(cli: Cli) -> Result<String> {
                 }
             };
             let root = store::init(&dir)?;
-            let mut fields = vec![("X-Root".to_string(), root.display().to_string())];
+            let mut fields = vec![("X-Root", root.display().to_string())];
             if !global && !no_register {
                 let repo = registry::add(&root)
                     .map_err(|e| e.with("Hint", "lastissue init --no-register"))?;
-                fields.push(("X-Repo".into(), repo.label));
+                fields.push(("X-Repo", repo.label));
             }
             Ok(format::block(&fields))
         }
@@ -122,8 +122,7 @@ fn in_store(
     // Core resolves identity lazily and never prints: warn here if the
     // command fell back to $USER@host.
     ctx.warn_identity();
-    res?;
-    Ok(ctx.take_output())
+    res.map(|()| ctx.out)
 }
 
 /// Turn a clap error into a header block: invalid enum values are validation

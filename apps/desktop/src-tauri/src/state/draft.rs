@@ -1,4 +1,4 @@
-//! Draft bookkeeping for the open issue's title and body (GUI-SPEC §5.2),
+//! Draft bookkeeping for the open issue's title and body,
 //! plain data so it tests directly.
 //!
 //! A [`Field`] knows the text last seen on disk (`saved`), the user's
@@ -11,9 +11,11 @@
 //! [`Drafts`] is the crash guard: unsaved body drafts mirrored to
 //! `<cache>/drafts/<ulid>.md` and offered back on the next open.
 
+use serde::Deserialize;
 use std::path::{Path, PathBuf};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub enum FieldKind {
     Title,
     Body,

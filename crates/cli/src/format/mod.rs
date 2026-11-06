@@ -83,10 +83,10 @@ pub fn message_with(msg: &Msg, computed: &[(&str, String)]) -> String {
 }
 
 /// A bare header block (no separator line, no body).
-pub fn block(fields: &[(String, String)]) -> String {
+pub fn block<K: AsRef<str>, V: AsRef<str>>(fields: &[(K, V)]) -> String {
     fields
         .iter()
-        .flat_map(|(k, v)| [k.as_str(), ": ", v, "\n"])
+        .flat_map(|(k, v)| [k.as_ref(), ": ", v.as_ref(), "\n"])
         .collect()
 }
 

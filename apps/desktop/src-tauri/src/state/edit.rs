@@ -1,4 +1,4 @@
-//! Every GUI write as plain data (GUI-SPEC §5.1, §5.2): an [`Op`] runs
+//! Every GUI write as plain data: an [`Op`] runs
 //! through core `ops` (never an ad-hoc file write) and comes back as an
 //! [`Applied`] carrying the issue's new messages and the [`Reload`] the
 //! workspace folds into its index right away, so the watcher's echo of the
@@ -13,16 +13,19 @@ use lastissue::ops::{self, CommentRef, CommentTarget, IssueUpdate, NewIssue, Out
 use lastissue::query::GroupKey;
 use lastissue::store::Store;
 use lastissue::store::mbox::Msg;
+use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
 /// One change to an issue's message #1. Pickers commit one of these
-/// immediately; title and body arrive debounced.
-#[derive(Debug, Clone, PartialEq, Eq)]
+/// immediately; title and body arrive debounced. Over IPC:
+/// `{kind: "state", value: "todo"}`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "kind", content = "value", rename_all = "camelCase")]
 pub enum Edit {
     Title(String),
     Body(String),
-    State(State),
-    Priority(Option<Priority>),
+    State(#[serde(with = "crate::dto::state_str")] State),
+    Priority(#[serde(with = "crate::dto::priority_str")] Option<Priority>),
     /// An address or `me`; `None` unassigns.
     Assignee(Option<String>),
     AddLabel(String),
@@ -186,7 +189,7 @@ fn comment_outcome(c: CommentRef, written: bool) -> Outcome {
     }
 }
 
-/// What dropping a card on a board column means (GUI-SPEC §5.1): the
+/// What dropping a card on a board column means: the
 /// column's state, or its priority when grouped by priority. `None` when
 /// the card is already there (dragging within a column does nothing).
 pub fn drop_edit(target: GroupKey, state: State, priority: Option<Priority>) -> Option<Edit> {

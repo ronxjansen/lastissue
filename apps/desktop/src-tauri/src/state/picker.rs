@@ -1,4 +1,4 @@
-//! Linear-style property pickers (GUI-SPEC §5, §7): the options for one
+//! Linear-style property pickers: the options for one
 //! property of the target issues (one, or the multi-selection for a bulk
 //! edit), and the option the typed text stands for. The front-end ranks
 //! them as the user types and commits the chosen [`Edit`]. State and
@@ -7,12 +7,15 @@
 
 use super::edit::Edit;
 use super::workspace::SharedHub;
-use crate::dto::PickOptionDto;
+use crate::dto;
+use crate::format::display_name;
 use lastissue::index::Index;
 use lastissue::model::{self, Priority, State};
 use lastissue::source::IssueSummary;
+use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub enum PickerKind {
     State,
     Priority,
@@ -22,7 +25,7 @@ pub enum PickerKind {
     Project,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct PickOption {
     pub label: String,
     /// Extra muted text (an address, a hint).
@@ -83,7 +86,7 @@ pub fn options(
             if let Some(me) = me {
                 seen.push(model::email_of(me));
                 out.push(PickOption {
-                    label: format!("{} (me)", crate::format::display_name(me)),
+                    label: format!("{} (me)", display_name(me)),
                     detail: Some(model::email_of(me)),
                     checked: has(Some(model::email_of(me).as_str())),
                     edit: Edit::Assignee(Some("me".into())),
@@ -107,7 +110,7 @@ pub fn options(
                 }
                 seen.push(e.clone());
                 out.push(PickOption {
-                    label: crate::format::display_name(p),
+                    label: display_name(p),
                     detail: Some(e.clone()),
                     checked: has(Some(e.as_str())),
                     edit: Edit::Assignee(Some(p.to_string())),
@@ -158,14 +161,9 @@ pub fn options(
                 all(&|s| s.project.is_none()),
                 Edit::Project(None),
             )];
-            let mut projects: Vec<_> = ix.projects().iter().collect();
-            projects.sort_by(|a, b| a.slug.cmp(&b.slug));
-            for p in projects {
-                out.push(opt(
-                    crate::format::project_name(&p.slug),
-                    all(&|s| s.project.as_deref() == Some(p.id.as_str())),
-                    Edit::Project(Some(p.id.clone())),
-                ));
+            for p in dto::projects(ix) {
+                let checked = all(&|s| s.project.as_deref() == Some(p.id.as_str()));
+                out.push(opt(p.name, checked, Edit::Project(Some(p.id))));
             }
             out
         }
@@ -212,16 +210,13 @@ pub fn typed(kind: PickerKind, query: &str, targets: &[&IssueSummary]) -> Option
 }
 
 /// The picker's options for the target issues, unranked.
-pub fn options_for(hub: &SharedHub, kind: PickerKind, ids: &[String]) -> Vec<PickOptionDto> {
+pub fn options_for(hub: &SharedHub, kind: PickerKind, ids: &[String]) -> Vec<PickOption> {
     let ws = hub.lock();
     let Some(r) = &ws.repo else {
         return Vec::new();
     };
     let targets: Vec<_> = ids.iter().filter_map(|id| r.index.by_id(id)).collect();
     options(kind, &targets, &r.index, ws.me())
-        .into_iter()
-        .map(Into::into)
-        .collect()
 }
 
 /// The option the picker's typed text stands for, if any.
@@ -230,11 +225,11 @@ pub fn typed_for(
     kind: PickerKind,
     ids: &[String],
     query: &str,
-) -> Option<PickOptionDto> {
+) -> Option<PickOption> {
     let ws = hub.lock();
     let r = ws.repo.as_ref()?;
     let targets: Vec<_> = ids.iter().filter_map(|id| r.index.by_id(id)).collect();
-    typed(kind, query, &targets).map(Into::into)
+    typed(kind, query, &targets)
 }
 
 #[cfg(test)]

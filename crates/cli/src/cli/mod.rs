@@ -41,7 +41,7 @@ Examples:
 #[derive(Parser, Debug)]
 #[command(name = "lastissue", version, about = ABOUT, long_about = LONG_ABOUT)]
 pub struct Cli {
-    // Discovery reads LASTISSUE_DIR itself (it's not a clap `env`).
+    // `explicit_root` reads LASTISSUE_DIR: not a clap `env`, so --repo beats it.
     #[arg(
         long,
         global = true,

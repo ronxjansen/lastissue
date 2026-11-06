@@ -1,5 +1,5 @@
 //! Error type. Every error is rendered as an RFC 5322-style header block on
-//! stderr and maps to a fixed exit code (§6.5).
+//! stderr and maps to a fixed exit code.
 
 use std::fmt;
 

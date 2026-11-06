@@ -1,4 +1,4 @@
-//! The Linear import (SPEC §6.5) without the prompts: what is already here,
+//! The Linear import without the prompts: what is already here,
 //! where new issues go, and writing one fetched issue at a time. A
 //! front-end drives it page by page (so it can report progress) and owns
 //! every question asked of the user.

@@ -1,13 +1,12 @@
 //! Shared command context: root, identity (core `identity`, plus the
-//! no-identity warning), output buffer, body input (§6.2).
+//! no-identity warning), output buffer, body input.
 
 use super::BodyArgs;
 use crate::error::{Error, Result};
 use crate::format;
-use crate::model::{self, Actor};
+use crate::model;
 use crate::store::{IssueRef, Store, mbox::Msg};
 use lastissue::identity::Identity;
-use std::cell::Cell;
 use std::io::{IsTerminal, Read};
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -16,8 +15,8 @@ pub struct Ctx {
     pub store: Store,
     pub color: bool,
     pub me: Identity,
-    warned: Cell<bool>,
-    out: String,
+    warned: bool,
+    pub out: String,
 }
 
 impl Ctx {
@@ -26,41 +25,35 @@ impl Ctx {
             store: Store::new(root),
             color: format::color_enabled(),
             me: Identity::new(from, sender),
-            warned: Cell::new(false),
+            warned: false,
             out: String::new(),
         }
     }
 
-    /// Resolve the acting identity (From: chain + Sender:), warning once on
-    /// stderr if it fell back to $USER@host.
-    pub fn actor(&self) -> Result<&Actor> {
-        let a = self.me.actor()?;
-        self.warn_identity();
-        Ok(a)
-    }
-
-    /// §4: the $USER@host fallback is announced on stderr, once.
-    pub fn warn_identity(&self) {
-        if self.warned.get() || !self.me.used_fallback() {
+    /// The $USER@host fallback is announced on stderr, once.
+    pub fn warn_identity(&mut self) {
+        if self.warned || !self.me.used_fallback() {
             return;
         }
-        self.warned.set(true);
+        self.warned = true;
         let addr = self.me.resolved().map(|r| r.address).unwrap_or_default();
         eprint!(
             "{}",
             format::block(&[
-                ("Warning".into(), "no-identity".into()),
-                ("Using".into(), addr),
-                (
-                    "Hint".into(),
-                    "set --from, LASTISSUE_FROM or git config user.email".into()
-                ),
+                ("Warning", "no-identity"),
+                ("Using", &addr),
+                ("Hint", "set --from, LASTISSUE_FROM or git config user.email"),
             ])
         );
     }
 
     pub fn print(&mut self, s: &str) {
         self.out.push_str(s);
+    }
+
+    /// Print `text` coloured (see [`format::paint`]).
+    pub fn paint(&mut self, text: &str, blocks: bool) {
+        self.out.push_str(&format::paint(text, self.color, blocks));
     }
 
     /// Computed X-Short-Id and X-Path for an issue.
@@ -74,19 +67,12 @@ impl Ctx {
     /// Print the messages at `idx` as written (mbox), with computed headers
     /// on message #1.
     pub fn print_indices(&mut self, r: &IssueRef, msgs: &[Msg], idx: &[usize]) {
-        for &i in idx {
-            let text = if i == 0 {
-                format::message_with(&msgs[i], &self.ident(r))
-            } else {
-                format::message_with(&msgs[i], &[])
-            };
-            let painted = format::paint(&text, self.color, false);
-            self.out.push_str(&painted);
-        }
-    }
-
-    pub fn take_output(&mut self) -> String {
-        std::mem::take(&mut self.out)
+        let ident = self.ident(r);
+        let text: String = idx
+            .iter()
+            .map(|&i| format::message_with(&msgs[i], if i == 0 { &ident } else { &[] }))
+            .collect();
+        self.paint(&text, false);
     }
 }
 
@@ -146,16 +132,11 @@ pub fn explicit_body(b: &BodyArgs) -> Result<Option<String>> {
 }
 
 /// Explicit body, else piped stdin.
-fn given_body(b: &BodyArgs) -> Result<Option<String>> {
+pub fn given_body(b: &BodyArgs) -> Result<Option<String>> {
     match explicit_body(b)? {
         None if stdin_is_piped() => read_stdin().map(Some),
         body => Ok(body),
     }
-}
-
-/// Body for commands where it's optional: explicit, else piped stdin, else empty.
-pub fn optional_body(b: &BodyArgs) -> Result<String> {
-    Ok(given_body(b)?.unwrap_or_default())
 }
 
 /// Body for commands where it's required: explicit, piped stdin, $EDITOR on

@@ -31,7 +31,7 @@ Issues live in the repo as real mail files (they open in `mutt -f`). Git syncs t
 ## Capabilities and Constraints
 
 - Stack: Svelte 5, Tailwind 4, shadcn-svelte (bits-ui), and Lucide icons, inside Tauri.
-- States, priorities, keywords (labels), projects, relations, comments and events, all from SPEC.md.
+- States, priorities, keywords (labels), projects, relations, comments and events, as specified in `crates/core/README.md`.
 - Both themes get equal care, and the app follows the OS appearance.
 
 ## Brand Commitments

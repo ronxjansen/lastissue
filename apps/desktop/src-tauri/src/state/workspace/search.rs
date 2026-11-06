@@ -10,7 +10,7 @@ use std::collections::HashSet;
 use std::path::PathBuf;
 use std::time::Duration;
 
-/// The full-text tier starts after this long without a keystroke (§6).
+/// The full-text tier starts after this long without a keystroke.
 const FULL_TEXT_DEBOUNCE: Duration = Duration::from_millis(150);
 /// Files per background batch: small first, so early results stream in,
 /// then doubling to amortize the round trips.
@@ -28,7 +28,7 @@ pub(crate) struct FilterText {
     pub(super) generation: u64,
 }
 
-/// The `/` search box (GUI-SPEC §6).
+/// The `/` search box.
 #[derive(Default)]
 pub(crate) struct SearchState {
     pub(crate) generation: u64,

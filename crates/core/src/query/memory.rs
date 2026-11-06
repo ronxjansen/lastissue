@@ -1,5 +1,5 @@
-//! The same filters and sort orders over in-memory [`IssueSummary`] heads
-//! (GUI-SPEC §3, §5, §6), plus grouping for the list and board. No I/O:
+//! The same filters and sort orders over in-memory [`IssueSummary`] heads,
+//! plus grouping for the list and board. No I/O:
 //! a front-end resolves a [`Filter`] once and re-evaluates it on every
 //! keystroke or watcher change.
 
@@ -59,7 +59,7 @@ impl<'a> Blockers<'a> {
         )
     }
 
-    /// At least one blocker exists and is open (SPEC §6.4).
+    /// At least one blocker exists and is open.
     fn is_blocked(&self, s: &IssueSummary) -> bool {
         s.blocked_by
             .iter()
@@ -81,8 +81,7 @@ impl Filter {
 
     /// Everything [`super::list`] checks, in memory, except the free text:
     /// scope, header fields and `is:ready` / `is:blocked`. The caller
-    /// checks the text ([`instant_match`], or the full-text tier,
-    /// GUI-SPEC §6).
+    /// checks the text ([`instant_match`], or the full-text tier).
     pub fn matches_summary_fields(&self, s: &IssueSummary, blockers: &Blockers) -> bool {
         self.in_scope(s.project.as_deref())
             && self.matches_fields(s)
@@ -90,7 +89,7 @@ impl Filter {
     }
 }
 
-/// Where a search term matched, best first (GUI-SPEC §6).
+/// Where a search term matched, best first.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Tier {
     Title,
@@ -127,7 +126,7 @@ pub fn term_tier(s: &IssueSummary, t: &str) -> Option<Tier> {
 }
 
 /// Every term occurs (case-insensitively) in the title, short ID, a
-/// label, the assignee or the project (GUI-SPEC §6, tier 1).
+/// label, the assignee or the project (tier 1).
 pub fn instant_match(s: &IssueSummary, terms: &[String]) -> bool {
     terms.iter().all(|t| term_tier(s, &lower(t)).is_some())
 }
@@ -137,7 +136,7 @@ pub fn sort_summaries(items: &mut [&IssueSummary], sort: Sort) {
     items.sort_by_cached_key(|s| sort_key(sort, *s, s.updated.map(|d| d.timestamp())));
 }
 
-/// What the list and board group by (GUI-SPEC §5).
+/// What the list and board group by.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
 pub enum Grouping {
     #[default]

@@ -1,4 +1,4 @@
-//! Scale benchmarks (GUI-SPEC §3, §11 M6): 10k and 100k synthetic issues.
+//! Scale benchmarks: 10k and 100k synthetic issues.
 //!
 //! `cargo bench -p lastissue-core --bench scale` (set `LASTISSUE_BENCH_DIR`
 //! to choose where the stores are generated; `BENCH_SIZES=10000` to limit

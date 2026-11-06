@@ -27,7 +27,7 @@
   }
 </script>
 
-<Dialog.Root open={true} onOpenChange={(o) => o || (app.overlay = null)}>
+<Dialog.Root open onOpenChange={(o) => o || (app.overlay = null)}>
   <Dialog.Content class="sm:max-w-md">
     <Dialog.Header><Dialog.Title>{title}</Dialog.Title></Dialog.Header>
     <form onsubmit={go} class="grid gap-3">

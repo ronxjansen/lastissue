@@ -6,11 +6,8 @@
 //! by the thousand.
 
 use crate::format::{display_name, error_line, project_name};
-use crate::link::Link;
 use crate::state::draft::FieldKind;
-use crate::state::edit::Edit;
-use crate::state::picker::PickOption;
-use crate::state::search::{Hit, Tier};
+use crate::state::search::{Hit, Snippet, Tier};
 use crate::state::view_state::ViewState;
 use crate::state::workspace::Workspace;
 use lastissue::index::Index;
@@ -37,6 +34,36 @@ pub fn parse_priority(s: Option<&str>) -> Result<Option<Priority>, String> {
         Some(p) => Priority::parse(p)
             .map(Some)
             .ok_or_else(|| format!("unknown priority {p:?}")),
+    }
+}
+
+/// `#[serde(with)]` for a [`State`] as its canonical name.
+pub mod state_str {
+    use super::{State, parse_state};
+    use serde::{Deserialize as _, Deserializer, Serializer};
+
+    pub fn serialize<S: Serializer>(s: &State, ser: S) -> Result<S::Ok, S::Error> {
+        ser.serialize_str(s.as_str())
+    }
+
+    pub fn deserialize<'de, D: Deserializer<'de>>(d: D) -> Result<State, D::Error> {
+        parse_state(&String::deserialize(d)?).map_err(serde::de::Error::custom)
+    }
+}
+
+/// `#[serde(with)]` for an optional [`Priority`] (`null`, `"none"` or
+/// `""` for none).
+pub mod priority_str {
+    use super::{Priority, parse_priority};
+    use serde::{Deserialize as _, Deserializer, Serialize as _, Serializer};
+
+    pub fn serialize<S: Serializer>(p: &Option<Priority>, ser: S) -> Result<S::Ok, S::Error> {
+        p.map(Priority::as_str).serialize(ser)
+    }
+
+    pub fn deserialize<'de, D: Deserializer<'de>>(d: D) -> Result<Option<Priority>, D::Error> {
+        parse_priority(Option::<String>::deserialize(d)?.as_deref())
+            .map_err(serde::de::Error::custom)
     }
 }
 
@@ -149,35 +176,23 @@ impl From<&Repo> for RepoDto {
 
 // ------------------------------------------------------------------ view
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(tag = "kind", content = "value", rename_all = "camelCase")]
-pub enum GroupKeyDto {
-    State(String),
-    Priority(Option<String>),
+/// Core's [`GroupKey`] over IPC: `{kind: "state", value: "todo"}`.
+#[derive(Serialize, Deserialize)]
+#[serde(remote = "GroupKey", tag = "kind", content = "value", rename_all = "camelCase")]
+pub enum GroupKeyDef {
+    State(#[serde(with = "state_str")] State),
+    Priority(#[serde(with = "priority_str")] Option<Priority>),
 }
 
-impl GroupKeyDto {
-    pub fn to_key(&self) -> Result<GroupKey, String> {
-        Ok(match self {
-            GroupKeyDto::State(s) => GroupKey::State(parse_state(s)?),
-            GroupKeyDto::Priority(p) => GroupKey::Priority(parse_priority(p.as_deref())?),
-        })
-    }
-}
-
-impl From<GroupKey> for GroupKeyDto {
-    fn from(k: GroupKey) -> Self {
-        match k {
-            GroupKey::State(s) => GroupKeyDto::State(s.as_str().into()),
-            GroupKey::Priority(p) => GroupKeyDto::Priority(p.map(|p| p.as_str().into())),
-        }
-    }
-}
+/// A [`GroupKey`] as a command argument.
+#[derive(Deserialize)]
+pub struct GroupKeyArg(#[serde(with = "GroupKeyDef")] pub GroupKey);
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct GroupDto {
-    pub key: GroupKeyDto,
+    #[serde(with = "GroupKeyDef")]
+    pub key: GroupKey,
     pub items: Vec<String>,
 }
 
@@ -192,7 +207,7 @@ pub struct CountsDto {
     pub projects: BTreeMap<String, usize>,
 }
 
-pub fn counts(ix: &Index, me: Option<&str>) -> CountsDto {
+fn counts(ix: &Index, me: Option<&str>) -> CountsDto {
     let me = me.map(model::email_of);
     let mut c = CountsDto::default();
     for s in ix.iter().filter(|s| s.state.is_open()) {
@@ -231,7 +246,7 @@ impl VisibleDto {
                 v.groups
                     .iter()
                     .map(|g| GroupDto {
-                        key: g.key.into(),
+                        key: g.key,
                         items: g.items.iter().map(|p| r.store.rel(p)).collect(),
                     })
                     .collect(),
@@ -252,73 +267,6 @@ impl VisibleDto {
 }
 
 // ----------------------------------------------------------------- edits
-
-/// An [`Edit`] over IPC: `{kind: "state", value: "todo"}`.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(tag = "kind", content = "value", rename_all = "camelCase")]
-pub enum EditDto {
-    Title(String),
-    Body(String),
-    State(String),
-    Priority(Option<String>),
-    Assignee(Option<String>),
-    AddLabel(String),
-    RemoveLabel(String),
-    Due(Option<String>),
-    Project(Option<String>),
-}
-
-impl EditDto {
-    pub fn to_edit(&self) -> Result<Edit, String> {
-        Ok(match self {
-            EditDto::Title(t) => Edit::Title(t.clone()),
-            EditDto::Body(b) => Edit::Body(b.clone()),
-            EditDto::State(s) => Edit::State(parse_state(s)?),
-            EditDto::Priority(p) => Edit::Priority(parse_priority(p.as_deref())?),
-            EditDto::Assignee(a) => Edit::Assignee(a.clone()),
-            EditDto::AddLabel(l) => Edit::AddLabel(l.clone()),
-            EditDto::RemoveLabel(l) => Edit::RemoveLabel(l.clone()),
-            EditDto::Due(d) => Edit::Due(d.clone()),
-            EditDto::Project(p) => Edit::Project(p.clone()),
-        })
-    }
-}
-
-impl From<&Edit> for EditDto {
-    fn from(e: &Edit) -> Self {
-        match e {
-            Edit::Title(t) => EditDto::Title(t.clone()),
-            Edit::Body(b) => EditDto::Body(b.clone()),
-            Edit::State(s) => EditDto::State(s.as_str().into()),
-            Edit::Priority(p) => EditDto::Priority(p.map(|p| p.as_str().into())),
-            Edit::Assignee(a) => EditDto::Assignee(a.clone()),
-            Edit::AddLabel(l) => EditDto::AddLabel(l.clone()),
-            Edit::RemoveLabel(l) => EditDto::RemoveLabel(l.clone()),
-            Edit::Due(d) => EditDto::Due(d.clone()),
-            Edit::Project(p) => EditDto::Project(p.clone()),
-        }
-    }
-}
-
-#[derive(Debug, Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct PickOptionDto {
-    pub label: String,
-    pub detail: Option<String>,
-    pub checked: bool,
-    pub edit: EditDto,
-}
-
-impl From<PickOption> for PickOptionDto {
-    fn from(o: PickOption) -> Self {
-        PickOptionDto {
-            edit: (&o.edit).into(),
-            label: o.label,
-            detail: o.detail,
-            checked: o.checked,
-        }
-    }
-}
 
 #[derive(Debug, Clone, Default, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
@@ -357,14 +305,7 @@ pub struct HitDto {
     pub key: String,
     pub id: String,
     pub tier: &'static str,
-    pub snippets: Vec<SnippetDto>,
-}
-
-#[derive(Debug, Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct SnippetDto {
-    pub loc: String,
-    pub text: String,
+    pub snippets: Vec<Snippet>,
 }
 
 impl HitDto {
@@ -373,14 +314,7 @@ impl HitDto {
             key: store.rel(&h.path),
             id: h.id.clone(),
             tier: Tier::label(h.tier),
-            snippets: h
-                .snippets
-                .iter()
-                .map(|s| SnippetDto {
-                    loc: s.loc.clone(),
-                    text: s.text.clone(),
-                })
-                .collect(),
+            snippets: h.snippets.clone(),
         }
     }
 }
@@ -551,10 +485,7 @@ impl DocDto {
             })
         };
         let s = r.index.get(&d.path).or_else(|| r.index.by_id(&d.id));
-        let (parent, blocked_by, related) = match s {
-            Some(s) => relations(&r.index, s),
-            None => (None, Vec::new(), Vec::new()),
-        };
+        let rel = |m: &String| relation(&r.index, m);
         let watchers = d
             .msgs
             .as_ref()
@@ -575,30 +506,13 @@ impl DocDto {
             reset: d.reset,
             summary: s.map(|s| SummaryDto::new(&r.store, s)),
             watchers,
-            parent,
-            blocked_by,
-            related,
+            parent: s.and_then(|s| s.parent.as_ref()).map(rel),
+            blocked_by: s.map(|s| s.blocked_by.iter().map(rel).collect()).unwrap_or_default(),
+            related: s.map(|s| s.related.iter().map(rel).collect()).unwrap_or_default(),
             activity: d.msgs.as_deref().map(activity).unwrap_or_default(),
-            link: Some(
-                Link {
-                    repo: r.repo.label.clone(),
-                    issue: Some(d.id.clone()),
-                }
-                .to_url(),
-            ),
+            link: Some(r.link(d.id.clone())),
         })
     }
-}
-
-pub fn relations(
-    ix: &Index,
-    s: &IssueSummary,
-) -> (Option<RelationDto>, Vec<RelationDto>, Vec<RelationDto>) {
-    (
-        s.parent.as_deref().map(|m| relation(ix, m)),
-        s.blocked_by.iter().map(|m| relation(ix, m)).collect(),
-        s.related.iter().map(|m| relation(ix, m)).collect(),
-    )
 }
 
 // ------------------------------------------------------------------ meta

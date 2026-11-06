@@ -11,6 +11,7 @@ import {
   api,
   on,
   type Doc,
+  type DocAction,
   type Edit,
   type GroupKey,
   type Meta,
@@ -27,7 +28,7 @@ import { SORT_LABEL } from "./format";
 import { type Action, type Context, type Keymap, merge } from "./keymap";
 import { type Columns, horizontal, locate, toggle, vertical } from "./nav";
 
-/** Title/body edits save this long after the last keystroke (§5.2). */
+/** Title/body edits save this long after the last keystroke. */
 const SAVE_DEBOUNCE_MS = 300;
 
 type Overlay =
@@ -213,7 +214,7 @@ class App {
     serial(() => api.setView(this.view)).catch(report);
   }
 
-  /** The visible issues as columns of short IDs (§7 navigation). */
+  /** The visible issues as columns of short IDs. */
   columns(): Columns {
     const id = (k: string) => this.issues.get(k)?.id;
     const ids = (keys: string[]) => keys.map(id).filter((x): x is string => !!x);
@@ -293,7 +294,7 @@ class App {
     write(() => api.docSave()).catch(report);
   }
 
-  docAction(a: "keepMine" | "useTheirs" | "restoreLeftover" | "discardLeftover") {
+  docAction(a: DocAction) {
     serial(() => api.docAction(a)).catch(report);
   }
 
@@ -363,9 +364,21 @@ class App {
     if (this.doc && this.doc.id !== next) this.open(next);
   }
 
-  private currentProject(): Project | undefined {
+  currentProject = $derived.by(() => {
     const s = this.view.scope;
     return s.kind === "project" ? this.projects.find((p) => p.id === s.project) : undefined;
+  });
+
+  /** Ask for a project name, save it, then show that project. */
+  private projectPrompt(title: string, value: string, save: (name: string) => Promise<Project>) {
+    this.overlay = {
+      kind: "prompt",
+      title,
+      placeholder: "Project name",
+      value,
+      submit: (name) =>
+        serial(() => save(name)).then((p) => this.setView({ scope: { kind: "project", project: p.id } })),
+    };
   }
 
   run(a: Action) {
@@ -476,34 +489,14 @@ class App {
         return;
       }
       case "newProject":
-        this.overlay = {
-          kind: "prompt",
-          title: "New project",
-          placeholder: "Project name",
-          value: "",
-          submit: (name) =>
-            serial(() => api.createProject(name)).then((p) =>
-              this.setView({ scope: { kind: "project", project: p.id } }),
-            ),
-        };
-        return;
+        return this.projectPrompt("New project", "", api.createProject);
       case "renameProject": {
-        const p = this.currentProject();
+        const p = this.currentProject;
         if (!p) {
           toast.info("Open a project first (g p).");
           return;
         }
-        this.overlay = {
-          kind: "prompt",
-          title: `Rename project ${p.name}`,
-          placeholder: "Project name",
-          value: p.name,
-          submit: (name) =>
-            serial(() => api.renameProject(p.id, name)).then((np) =>
-              this.setView({ scope: { kind: "project", project: np.id } }),
-            ),
-        };
-        return;
+        return this.projectPrompt(`Rename project ${p.name}`, p.name, (name) => api.renameProject(p.id, name));
       }
       case "addRepo":
         openDialog({ directory: true, title: "Open an issues folder or a repo containing one" })

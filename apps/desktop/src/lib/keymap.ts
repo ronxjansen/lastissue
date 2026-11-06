@@ -1,4 +1,4 @@
-// Keyboard (GUI-SPEC §7): the action registry, the default keymap, user
+// Keyboard: the action registry, the default keymap, user
 // overrides (`gui-keymap.json`, loaded and watched by Rust), and key
 // resolution with contexts and two-key sequences (`g i`).
 //
@@ -243,7 +243,7 @@ export class Resolver {
     );
   }
 
-  clear() {
+  private clear() {
     this.pending = null;
     if (this.timer) clearTimeout(this.timer);
     this.timer = null;

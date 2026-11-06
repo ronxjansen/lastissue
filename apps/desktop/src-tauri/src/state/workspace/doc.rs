@@ -7,6 +7,7 @@ use crate::format::error_line;
 use crate::state::doc::Doc;
 use crate::state::draft::FieldKind;
 use crate::state::edit::{Edit, Op};
+use serde::Deserialize;
 use std::path::PathBuf;
 
 /// Open an issue in the detail pane (`None` closes it).
@@ -129,34 +130,41 @@ fn save_doc_locked(hub: &SharedHub, ws: &mut Workspace) {
     });
 }
 
-/// The conflict banner, the leftover-draft banner.
-pub fn doc_action(hub: &SharedHub, action: &str) -> std::result::Result<(), String> {
+/// The conflict banner's and the leftover-draft banner's buttons.
+#[derive(Debug, Clone, Copy, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum DocAction {
+    KeepMine,
+    UseTheirs,
+    RestoreLeftover,
+    DiscardLeftover,
+}
+
+pub fn doc_action(hub: &SharedHub, action: DocAction) {
     let mut ws = hub.lock();
     let drafts = ws.drafts.clone();
     let Some(doc) = ws.doc.as_mut() else {
-        return Ok(());
+        return;
     };
     let save = match action {
-        "keepMine" => {
+        DocAction::KeepMine => {
             doc.keep_mine();
             true
         }
-        "useTheirs" => {
+        DocAction::UseTheirs => {
             doc.use_theirs(drafts.as_ref());
             false
         }
-        "restoreLeftover" => doc.restore_leftover(drafts.as_ref()),
-        "discardLeftover" => {
+        DocAction::RestoreLeftover => doc.restore_leftover(drafts.as_ref()),
+        DocAction::DiscardLeftover => {
             doc.discard_leftover(drafts.as_ref());
             false
         }
-        a => return Err(format!("unknown doc action {a:?}")),
     };
     if save {
         save_doc_locked(hub, &mut ws);
     }
     hub.emit(events::DOC, &DocDto::new(&ws));
-    Ok(())
 }
 
 #[cfg(test)]

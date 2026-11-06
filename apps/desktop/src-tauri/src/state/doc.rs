@@ -1,4 +1,4 @@
-//! The issue open in the detail pane (GUI-SPEC §3, §5.2): its messages,
+//! The issue open in the detail pane: its messages,
 //! the title and body drafts, the crash-guard mirror and the "changed on
 //! disk" conflict state. Plain data: the workspace does the I/O and the
 //! front-end owns the debounce timer (it calls save ~300 ms after the last

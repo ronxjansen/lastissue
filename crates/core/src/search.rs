@@ -1,5 +1,5 @@
-//! Full-text search (SPEC §6.4): a byte-level prefilter over the raw file,
-//! then line matching over the parsed issue for the match context (§6.3).
+//! Full-text search: a byte-level prefilter over the raw file,
+//! then line matching over the parsed issue for the match context.
 
 use crate::error::{Error, Result};
 use crate::model::{self, comment_numbers};

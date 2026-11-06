@@ -1,12 +1,12 @@
-//! Listing (SPEC §6.4): filtering, full-text search, sorting and paging.
+//! Listing: filtering, full-text search, sorting and paging.
 //!
-//! A [`ListQuery`] holds the user's criteria in the forms SPEC §6 accepts
+//! A [`ListQuery`] holds the user's criteria as typed
 //! (WHO, issue and project references). [`Filter::resolve`] turns them into
 //! concrete values once; [`list`] then streams issues in path order through
 //! the filter on the thread pool, stopping early when no sort needs the
 //! full set.
 //!
-//! Filter tokens (GUI-SPEC §6, SPEC §6.4) parse with [`tokens`] and fold
+//! Filter tokens parse with [`tokens`] and fold
 //! into a [`ListQuery`] with [`ListQuery::apply`], so the token parser, the
 //! CLI flags and the GUI share one evaluation path.
 
@@ -146,11 +146,11 @@ pub struct Filter {
 }
 
 /// `s` lowercased, without allocating when it already is.
-pub fn lower(s: &str) -> std::borrow::Cow<'_, str> {
+pub fn lower(s: &str) -> Cow<'_, str> {
     if s.chars().any(char::is_uppercase) {
-        std::borrow::Cow::Owned(s.to_lowercase())
+        Cow::Owned(s.to_lowercase())
     } else {
-        std::borrow::Cow::Borrowed(s)
+        Cow::Borrowed(s)
     }
 }
 
@@ -376,7 +376,7 @@ fn resolve_project(store: &Store, q: &str) -> Result<Project> {
 
 // ---------------------------------------------------------------- tokens
 
-/// One filter token (GUI-SPEC §6).
+/// One filter token.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Token {
     /// `state:S`; repeated tokens are alternatives.
@@ -453,7 +453,7 @@ fn due_input(v: &str) -> String {
     }
 }
 
-/// Parse a filter string (GUI-SPEC §6). Only known keys are tokens; other
+/// Parse a filter string. Only known keys are tokens; other
 /// words, `auth.rs:41` included, are free text.
 pub fn tokens(input: &str) -> Result<Vec<Token>> {
     let mut out = Vec::new();
@@ -604,16 +604,10 @@ pub fn list(store: &Store, me: &Identity, q: &ListQuery) -> Result<Page> {
             }
         }
         let matches = match (&f.terms, &raw) {
-            (Some(t), Some(bytes)) => {
-                let msgs = mbox::parse_mbox(bytes)?;
-                if msgs.is_empty() {
-                    return Err(Error::validation("corrupt-file").with("Path", store.rel(&r.path)));
-                }
-                match t.matches(&msgs) {
-                    Some(m) => Some(m),
-                    None => return Ok(None),
-                }
-            }
+            (Some(t), Some(bytes)) => match t.matches(&store.parse(&r.path, bytes)?) {
+                Some(m) => Some(m),
+                None => return Ok(None),
+            },
             _ => None,
         };
         let stats = match (&raw, sort_updated) {

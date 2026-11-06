@@ -1,4 +1,4 @@
-//! The `lastissue://` URL scheme (GUI-SPEC §10). Plain parsing.
+//! The `lastissue://` URL scheme. Plain parsing.
 //!
 //! - `lastissue://repo/<label>/issue/<id>`: open the repo with that
 //!   registry label and show the issue in the detail pane.

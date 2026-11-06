@@ -1,4 +1,4 @@
-<!-- The activity timeline (GUI-SPEC §5): comments and events in file order.
+<!-- The activity timeline: comments and events in file order.
      Events are one compact line each; a run of three or more collapses
      into one expandable line. Comments edit in place and delete with a
      confirm; the composer at the end adds one (⌘↵). -->
@@ -7,7 +7,8 @@
   import { app, report } from "$lib/app.svelte";
   import { ago, dateTime } from "$lib/format";
   import { Button } from "$lib/components/ui/button";
-  import Markdown from "./Markdown.svelte";
+  import DOMPurify from "dompurify";
+  import { marked } from "marked";
   import MarkdownEditor from "./MarkdownEditor.svelte";
 
   let { items }: { items: Activity[] } = $props();
@@ -126,7 +127,8 @@
             <Button size="sm" onclick={() => saveEdit(c.messageId)}>Save <span class="font-mono text-[11px] opacity-60">⌘↵</span></Button>
           </div>
         {:else}
-          <Markdown source={c.body} class="md mt-1.5 text-[15px]" />
+          <!-- Sanitized: comment bodies come from files anyone can write. -->
+          <div class="md mt-1.5 text-[15px]">{@html DOMPurify.sanitize(marked.parse(c.body, { async: false }))}</div>
         {/if}
       </li>
     {/if}

@@ -81,7 +81,7 @@
     baseline = editor.action(getMarkdown());
     loadedReset = reset;
     empty = value.trim() === "";
-    if (autofocus) focus();
+    if (autofocus) editor.action((ctx) => ctx.get(editorViewCtx).focus());
   });
 
   onDestroy(() => {
@@ -89,8 +89,10 @@
     editor = null;
   });
 
+  // Read `reset` first so the effect tracks it: `editor` (not reactive)
+  // is still null on the first run.
   $effect(() => {
-    if (editor && reset !== loadedReset) {
+    if (reset !== loadedReset && editor) {
       loadedReset = reset;
       load(value);
     }
@@ -104,10 +106,6 @@
       if (editableNow) view.focus();
     });
   });
-
-  function focus() {
-    editor?.action((ctx) => ctx.get(editorViewCtx).focus());
-  }
 
   function keydown(e: KeyboardEvent) {
     if (e.key === "Enter" && (e.metaKey || e.ctrlKey) && onsubmit) {

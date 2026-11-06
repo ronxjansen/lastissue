@@ -1,4 +1,4 @@
-//! Two-tier search (GUI-SPEC §6). Plain data; the workspace runs [`scan`]
+//! Two-tier search. Plain data; the workspace runs [`scan`]
 //! on a background thread.
 //!
 //! 1. **Instant**, in memory: every free-text term is looked up in the
@@ -20,11 +20,12 @@ use lastissue::search::Terms;
 use lastissue::source::IssueSummary;
 use lastissue::store::mbox;
 use rayon::prelude::*;
+use serde::Serialize;
 use std::path::PathBuf;
 
 /// Where a full-text term matched: `body` or `#n` (comment number), and
 /// the line around the hit.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct Snippet {
     pub loc: String,
     pub text: String,
@@ -184,7 +185,7 @@ pub fn scan(cands: &[Candidate], ft: &FullText) -> Vec<Hit> {
     cands.par_iter().filter_map(|c| scan_one(c, ft)).collect()
 }
 
-/// Tiered order (GUI-SPEC §6): tier, then newest first, then ID.
+/// Tiered order: tier, then newest first, then ID.
 pub fn rank(hits: &mut [Hit]) {
     hits.sort_by(|a, b| {
         a.tier

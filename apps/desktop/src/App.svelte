@@ -36,14 +36,10 @@
     e.stopPropagation();
     if (hit !== "pending") app.run(hit);
   }
-
-  // Leaving the window (or quitting) must not lose a pending save.
-  function blur() {
-    app.flushSave();
-  }
 </script>
 
-<svelte:window onkeydown={keydown} onblur={blur} onbeforeunload={blur} />
+<!-- Leaving the window (or quitting) must not lose a pending save. -->
+<svelte:window onkeydown={keydown} onblur={() => app.flushSave()} onbeforeunload={() => app.flushSave()} />
 <ModeWatcher />
 <Toaster position="bottom-right" />
 
@@ -76,16 +72,18 @@
   <StatusBar />
 </div>
 
-{#if app.overlay?.kind === "picker"}
-  {#key app.overlay}<Picker picker={app.overlay.picker} ids={app.overlay.ids} />{/key}
-{:else if app.overlay?.kind === "palette"}
-  {#key app.overlay}<Palette mode={app.overlay.mode} />{/key}
-{:else if app.overlay?.kind === "search"}
-  <SearchBox />
-{:else if app.overlay?.kind === "create"}
-  <CreateDialog />
-{:else if app.overlay?.kind === "confirm"}
-  <ConfirmDialog {...app.overlay} />
-{:else if app.overlay?.kind === "prompt"}
-  {#key app.overlay}<PromptDialog {...app.overlay} />{/key}
-{/if}
+{#key app.overlay}
+  {#if app.overlay?.kind === "picker"}
+    <Picker picker={app.overlay.picker} ids={app.overlay.ids} />
+  {:else if app.overlay?.kind === "palette"}
+    <Palette mode={app.overlay.mode} />
+  {:else if app.overlay?.kind === "search"}
+    <SearchBox />
+  {:else if app.overlay?.kind === "create"}
+    <CreateDialog />
+  {:else if app.overlay?.kind === "confirm"}
+    <ConfirmDialog {...app.overlay} />
+  {:else if app.overlay?.kind === "prompt"}
+    <PromptDialog {...app.overlay} />
+  {/if}
+{/key}

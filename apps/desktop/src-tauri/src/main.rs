@@ -1,8 +1,8 @@
-//! lastissue desktop app (GUI-SPEC): a Tauri shell over the core library.
+//! lastissue desktop app: a Tauri shell over the core library.
 //!
 //! `lastissue-gui [ROOT]`: open ROOT (an issues root), else `LASTISSUE_DIR`,
 //! else the root discovered from the current directory.
-//! `lastissue-gui lastissue://repo/<label>/issue/<id>`: open a link (§10).
+//! `lastissue-gui lastissue://repo/<label>/issue/<id>`: open a link.
 
 mod commands;
 mod dto;

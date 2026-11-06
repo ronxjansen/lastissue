@@ -1,4 +1,4 @@
-//! CLI snapshot tests against a temp root (§7.3).
+//! CLI snapshot tests against a temp root.
 
 mod common;
 

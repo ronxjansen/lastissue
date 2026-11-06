@@ -1,4 +1,4 @@
-// Keyboard navigation over the visible issues (GUI-SPEC §7): plain
+// Keyboard navigation over the visible issues: plain
 // functions over columns of IDs (the list is one column in display order,
 // the board one column per group). The cursor is the keyboard's position;
 // the selection is the set `x` toggles; the open issue is separate.

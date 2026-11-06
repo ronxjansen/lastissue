@@ -1,4 +1,4 @@
-//! `lastissue://` links (GUI-SPEC §10).
+//! `lastissue://` links.
 
 use super::doc::select_locked;
 use super::repo::open_repo;
@@ -6,7 +6,7 @@ use super::{SharedHub, Workspace, events};
 use crate::dto::MetaDto;
 use crate::link::Link;
 
-/// Open a `lastissue://` URL (GUI-SPEC §10): switch to the labelled repo
+/// Open a `lastissue://` URL: switch to the labelled repo
 /// if needed, then select the issue and focus the detail pane, at once or
 /// as soon as the repo has loaded.
 pub fn open_url(hub: &SharedHub, url: &str) {

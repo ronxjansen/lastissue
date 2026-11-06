@@ -1,4 +1,4 @@
-//! User keymap overrides (GUI-SPEC §7): `gui-keymap.json` in the config
+//! User keymap overrides: `gui-keymap.json` in the config
 //! dir, read here and watched, and pushed to the front-end, which owns the
 //! defaults, the dispatch and checking the entries.
 //!

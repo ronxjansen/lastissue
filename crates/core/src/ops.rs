@@ -1,10 +1,10 @@
-//! Every mutation (GUI-SPEC §2.1): issue create / update / close / reopen /
+//! Every mutation: issue create / update / close / reopen /
 //! move / delete, comment create / edit / delete, project create / rename /
 //! delete. The CLI and the GUI call these, so both get identical semantics
 //! and identical event messages.
 //!
-//! Inputs are plain structs. Values a user types keep the forms SPEC §6
-//! accepts: WHO is an address or `me`, dates are friendly date input
+//! Inputs are plain structs. Values a user types keep their typed form:
+//! WHO is an address or `me`, dates are friendly date input
 //! ([`crate::dates`]), issue references are any unambiguous ID form, and
 //! custom headers are `K=V`. Every input is resolved before anything is
 //! written, so a bad one leaves the file untouched.
@@ -96,7 +96,7 @@ fn apply_custom_headers(m: &mut Msg, headers: &[String]) -> Result<()> {
     Ok(())
 }
 
-/// After header changes: enforce the duplicate rule (SPEC §3.1).
+/// After header changes: enforce the duplicate rule.
 fn validate_duplicate(m: &mut Msg) -> Result<()> {
     if state_of(m) == State::Duplicate {
         if !m.has("References") {
@@ -111,15 +111,14 @@ fn validate_duplicate(m: &mut Msg) -> Result<()> {
     Ok(())
 }
 
-/// How long an update burst stays open, from its event's `Date`
-/// (GUI-SPEC §9).
+/// How long an update burst stays open, from its event's `Date`.
 pub const BURST_SECS: i64 = 15 * 60;
 
 /// The event line a body edit records (no diff).
 pub const BODY_EDITED: &str = "body: edited";
 
 /// Index of the last message when it is an `update` event that the next
-/// change by `actor` at `now` merges into (GUI-SPEC §9): same `From` and
+/// change by `actor` at `now` merges into: same `From` and
 /// `Sender`, and its `Date` less than [`BURST_SECS`] old.
 fn open_burst(msgs: &[Msg], actor: &Actor, now: DateTime<FixedOffset>) -> Option<usize> {
     let i = msgs.len().checked_sub(1).filter(|i| *i > 0)?;
@@ -155,8 +154,8 @@ fn merge_line(line: &str, c: &Change) -> Option<String> {
 }
 
 /// Record changes of message #1 (and a body edit) as an `update` event:
-/// merged into the open burst if there is one, else appended (GUI-SPEC
-/// §9). The merged event keeps its `Date` (the burst start); a field it
+/// merged into the open burst if there is one, else appended.
+/// The merged event keeps its `Date` (the burst start); a field it
 /// already lists keeps its original "from", and a field changed back is
 /// dropped, as is an event left with no lines. Returns the index of the
 /// event holding the changes, or `None` when there is none.
@@ -236,7 +235,7 @@ fn check_body(body: &str) -> Result<()> {
 
 // ---------------------------------------------------------------- create
 
-/// `issue create` (SPEC §5.1).
+/// `issue create`.
 #[derive(Debug, Clone, Default)]
 pub struct NewIssue {
     pub title: String,
@@ -339,7 +338,7 @@ pub fn create_issue(store: &Store, me: &Identity, new: &NewIssue) -> Result<Outc
 
 // ---------------------------------------------------------------- update
 
-/// `issue update` (SPEC §5.2). For `Option<Option<T>>` fields, `Some(None)`
+/// `issue update`. For `Option<Option<T>>` fields, `Some(None)`
 /// removes the header.
 #[derive(Debug, Clone, Default)]
 pub struct IssueUpdate {
@@ -490,7 +489,7 @@ pub fn update_issue(store: &Store, me: &Identity, id: &str, u: &IssueUpdate) -> 
 }
 
 /// Record every changed header of message #1 and a body edit as one update
-/// event (coalesced, GUI-SPEC §9) and write the file, unless nothing
+/// event (coalesced) and write the file, unless nothing
 /// changed at all.
 fn commit(
     store: &Store,
@@ -522,7 +521,7 @@ fn now() -> DateTime<FixedOffset> {
 
 // ---------------------------------------------------------------- close / reopen
 
-/// How `issue close` closes (SPEC §5.3).
+/// How `issue close` closes.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub enum CloseAs {
     #[default]
@@ -778,7 +777,7 @@ pub fn comment_target(store: &Store, id: &str, reply_to: Option<&str>) -> Result
     Ok(CommentTarget { issue: r, reply_to })
 }
 
-/// Append a comment. Ends an event burst (GUI-SPEC §9).
+/// Append a comment. Ends an event burst.
 pub fn add_comment(
     store: &Store,
     me: &Identity,

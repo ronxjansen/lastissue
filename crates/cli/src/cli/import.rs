@@ -1,4 +1,4 @@
-//! `lastissue import linear`. The one place with interactive prompts (§6.2):
+//! `lastissue import linear`. The one place with interactive prompts:
 //! on a TTY every missing value is asked for, otherwise it fails fast
 //! naming the flag. Prompts only fill the same values as the flags.
 
@@ -192,7 +192,8 @@ fn linear(ctx: &mut Ctx, a: LinearArgs) -> Result<()> {
     }
 
     // Stream: fetch a page, write a page.
-    let from = ctx.actor()?.from.clone();
+    let from = ctx.me.actor()?.from.clone();
+    ctx.warn_identity();
     let mut run = Import::new(index, into, existing, from);
     let mut after: Option<String> = None;
     let mut page = 0;

@@ -1,4 +1,4 @@
-//! What the main view shows (GUI-SPEC §5): list or board, the sidebar
+//! What the main view shows: list or board, the sidebar
 //! scope, the filter text, sort and grouping. Plain data (and its IPC
 //! shape); [`ViewState::compute`] evaluates it against the index with
 //! core's filter, sort and grouping.
@@ -58,7 +58,7 @@ enum GroupingDef {
 pub struct ViewState {
     pub mode: Mode,
     pub scope: Scope,
-    /// Filter tokens plus free text (GUI-SPEC §6).
+    /// Filter tokens plus free text.
     pub filter: String,
     #[serde(with = "SortDef")]
     pub sort: Sort,
@@ -96,7 +96,7 @@ pub struct Visible {
     /// without an identity); `groups` is empty then.
     pub error: Option<String>,
     /// Issues passing every other criterion whose text the instant tier
-    /// didn't find: the full-text tier's work (GUI-SPEC §6).
+    /// didn't find: the full-text tier's work.
     pub candidates: Vec<Candidate>,
 }
 

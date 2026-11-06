@@ -1,4 +1,4 @@
-//! Identity (SPEC §4, GUI-SPEC §4): who is acting (`From:`) and on whose
+//! Identity: who is acting (`From:`) and on whose
 //! behalf an agent acts (`Sender:`), plus `me` resolution for WHO arguments.
 //!
 //! Resolution is lazy: nothing (not even `git config`) runs until an
@@ -43,7 +43,7 @@ pub struct Identity {
 }
 
 impl Identity {
-    /// The CLI chain (SPEC §4): explicit `from`, then git config, then
+    /// The CLI chain: explicit `from`, then git config, then
     /// `$USER@host`. Blank values count as absent.
     pub fn new(from: Option<String>, sender: Option<String>) -> Self {
         Identity {
@@ -62,7 +62,7 @@ impl Identity {
         id
     }
 
-    /// Run `git config` in `dir` (GUI-SPEC §4: respects per-repo identities).
+    /// Run `git config` in `dir` (respects per-repo identities).
     pub fn in_dir(mut self, dir: impl Into<PathBuf>) -> Self {
         self.git_dir = Some(dir.into());
         self
@@ -80,20 +80,11 @@ impl Identity {
         if let Some((a, _)) = self.resolved.get() {
             return Ok(a);
         }
-        let from = match &self.from {
-            Some(f) => ResolvedFrom {
-                address: model::validate_address(f)?,
-                source: FromSource::Explicit,
-            },
+        let (from, source) = match &self.from {
+            Some(f) => (model::validate_address(f)?, FromSource::Explicit),
             None => match from_git(self.git_dir.as_deref()) {
-                Some(address) => ResolvedFrom {
-                    address,
-                    source: FromSource::Git,
-                },
-                None if self.allow_fallback => ResolvedFrom {
-                    address: fallback_address(),
-                    source: FromSource::Fallback,
-                },
+                Some(address) => (address, FromSource::Git),
+                None if self.allow_fallback => (fallback_address(), FromSource::Fallback),
                 None => {
                     return Err(Error::validation("no-identity").with(
                         "Hint",
@@ -107,11 +98,8 @@ impl Identity {
             .as_deref()
             .map(model::validate_address)
             .transpose()?;
-        let actor = Actor {
-            from: from.address,
-            sender,
-        };
-        Ok(&self.resolved.get_or_init(|| (actor, from.source)).0)
+        let actor = Actor { from, sender };
+        Ok(&self.resolved.get_or_init(|| (actor, source)).0)
     }
 
     /// The resolved `From:` and its source, if resolution already happened.
@@ -180,7 +168,7 @@ fn from_git(dir: Option<&Path>) -> Option<String> {
     model::validate_address(&addr).ok()
 }
 
-/// `$USER@host` (SPEC §4's last resort).
+/// `$USER@host` (the last resort).
 fn fallback_address() -> String {
     let user = std::env::var("USER")
         .or_else(|_| std::env::var("USERNAME"))

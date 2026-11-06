@@ -19,7 +19,7 @@
   }
 </script>
 
-<AlertDialog.Root open={true} onOpenChange={(o) => o || (app.overlay = null)}>
+<AlertDialog.Root open onOpenChange={(o) => o || (app.overlay = null)}>
   <!-- svelte-ignore a11y_no_static_element_interactions -->
   <AlertDialog.Content onkeydown={keydown}>
     <AlertDialog.Header>

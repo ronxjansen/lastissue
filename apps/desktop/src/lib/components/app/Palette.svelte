@@ -1,4 +1,4 @@
-<!-- ⌘K (GUI-SPEC §7): every command with its binding, plus repos and
+<!-- ⌘K: every command with its binding, plus repos and
      projects. `g p` opens it narrowed to scopes. -->
 <script lang="ts">
   import type { Scope } from "$lib/api";
@@ -7,7 +7,6 @@
   import { ACTIONS, type Action, bindingFor, pretty } from "$lib/keymap";
   import { Kbd } from "$lib/components/ui/kbd";
   import FuzzyList from "./FuzzyList.svelte";
-  import Overlay from "./Overlay.svelte";
 
   let { mode }: { mode: "all" | "scopes" } = $props();
 
@@ -53,27 +52,25 @@
   }
 </script>
 
-<Overlay onclose={() => (app.overlay = null)}>
-  <FuzzyList
-    bind:query
-    {rows}
-    placeholder={mode === "all" ? "Type a command…" : "Go to project…"}
-    onpick={pick}
-    oncancel={() => (app.overlay = null)}
-  >
-    {#snippet row(e)}
-      <div class="flex items-center gap-2">
-        <span class="flex-1 truncate">{e.title}</span>
-        {#if e.kind === "repo"}<span class="truncate text-xs text-muted-foreground">{e.detail}</span>{/if}
-        {#if e.kind === "action" && e.hint}<Kbd>{e.hint}</Kbd>{/if}
-      </div>
-    {/snippet}
-    {#snippet footer()}
-      {#if app.merged.errors.length || app.userKeymap.errors.length}
-        <span class="text-destructive">Keymap: {[...app.userKeymap.errors, ...app.merged.errors].join("; ")}</span>
-      {:else}
-        ↵ run · esc close
-      {/if}
-    {/snippet}
-  </FuzzyList>
-</Overlay>
+<FuzzyList
+  bind:query
+  {rows}
+  placeholder={mode === "all" ? "Type a command…" : "Go to project…"}
+  onpick={pick}
+  onclose={() => (app.overlay = null)}
+>
+  {#snippet row(e)}
+    <div class="flex items-center gap-2">
+      <span class="flex-1 truncate">{e.title}</span>
+      {#if e.kind === "repo"}<span class="truncate text-xs text-muted-foreground">{e.detail}</span>{/if}
+      {#if e.kind === "action" && e.hint}<Kbd>{e.hint}</Kbd>{/if}
+    </div>
+  {/snippet}
+  {#snippet footer()}
+    {#if app.merged.errors.length || app.userKeymap.errors.length}
+      <span class="text-destructive">Keymap: {[...app.userKeymap.errors, ...app.merged.errors].join("; ")}</span>
+    {:else}
+      ↵ run · esc close
+    {/if}
+  {/snippet}
+</FuzzyList>

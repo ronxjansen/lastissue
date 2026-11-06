@@ -1,4 +1,4 @@
-//! Where a front-end gets issue heads (GUI-SPEC §2.1, §3): [`load`] reads
+//! Where a front-end gets issue heads: [`load`] reads
 //! one file's head and stats from disk.
 
 use crate::error::{Error, Result};
@@ -38,7 +38,7 @@ pub struct IssueSummary {
     pub parent: Option<String>,
     pub blocked_by: Vec<String>,
     pub related: Vec<String>,
-    /// File mtime when read, to recognise one's own writes (GUI-SPEC §3).
+    /// File mtime when read, to recognise one's own writes.
     pub mtime: Option<SystemTime>,
 }
 

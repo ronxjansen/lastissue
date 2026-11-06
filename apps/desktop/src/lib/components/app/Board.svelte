@@ -1,4 +1,4 @@
-<!-- Kanban (GUI-SPEC §5.1): a column per state (or priority band). Dropping
+<!-- Kanban: a column per state (or priority band). Dropping
      a card on another column writes exactly what `issue update --state`
      would; there is no manual order, so dropping in its own column is a
      no-op. ⇧h / ⇧l do the same from the keyboard. -->

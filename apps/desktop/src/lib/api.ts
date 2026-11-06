@@ -211,7 +211,7 @@ export interface UserKeymap {
   errors: string[];
 }
 
-export interface Snapshot {
+interface Snapshot {
   meta: Meta;
   issues: Summary[];
   projects: Project[];
@@ -232,6 +232,8 @@ export interface NewIssue {
   due?: string | null;
 }
 
+export type DocAction = "keepMine" | "useTheirs" | "restoreLeftover" | "discardLeftover";
+
 export const api = {
   snapshot: () => invoke<Snapshot>("snapshot"),
   setView: (view: View) => invoke<void>("set_view", { view }),
@@ -239,15 +241,13 @@ export const api = {
   docEdit: (id: string, fieldKind: "title" | "body", text: string) =>
     invoke<boolean>("doc_edit", { id, fieldKind, text }),
   docSave: () => invoke<void>("doc_save"),
-  docAction: (action: "keepMine" | "useTheirs" | "restoreLeftover" | "discardLeftover") =>
-    invoke<void>("doc_action", { action }),
+  docAction: (action: DocAction) => invoke<void>("doc_action", { action }),
   applyEdit: (ids: string[], edit: Edit) => invoke<void>("apply_edit", { ids, edit }),
   dropCard: (ids: string[], target: GroupKey) => invoke<void>("drop_card", { ids, target }),
   moveCards: (ids: string[], step: number) => invoke<void>("move_cards", { ids, step }),
   deleteIssues: (ids: string[]) => invoke<void>("delete_issues", { ids }),
   createIssue: (issue: NewIssue) => invoke<string>("create_issue", { issue }),
-  addComment: (id: string, body: string, replyTo: string | null = null) =>
-    invoke<void>("add_comment", { id, body, replyTo }),
+  addComment: (id: string, body: string) => invoke<void>("add_comment", { id, body, replyTo: null }),
   editComment: (id: string, messageId: string, body: string) =>
     invoke<void>("edit_comment", { id, messageId, body }),
   deleteComment: (id: string, messageId: string) =>
@@ -266,7 +266,7 @@ export const api = {
   openKeymapFile: () => invoke<string>("open_keymap_file"),
 };
 
-export interface Events {
+interface Events {
   meta: Meta;
   index: IndexDelta;
   visible: Visible;

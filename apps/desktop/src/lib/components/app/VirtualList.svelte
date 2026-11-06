@@ -1,5 +1,5 @@
 <!-- Fixed-height rows, rendered only around the viewport, so cost doesn't
-     grow with the issue count (GUI-SPEC §3). `scrollTo` keeps a row in view. -->
+     grow with the issue count. `scrollTo` keeps a row in view. -->
 <script lang="ts" generics="T">
   import type { Snippet } from "svelte";
 

@@ -1,4 +1,4 @@
-//! The in-memory issue set a front-end keeps for one root (GUI-SPEC §3):
+//! The in-memory issue set a front-end keeps for one root:
 //! every issue head as an [`IssueSummary`], plus the project folders.
 //!
 //! Loading is split in two so the I/O can run off the UI thread: [`scan`]

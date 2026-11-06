@@ -1,4 +1,4 @@
-//! The window's state (GUI-SPEC §3, §8): the registry's repos, the open
+//! The window's state: the registry's repos, the open
 //! repo (index, watcher, identity), the view state and its evaluated
 //! result, the open issue, and both search tiers.
 //!
@@ -14,7 +14,7 @@ mod repo;
 mod search;
 mod writes;
 
-pub use doc::{doc_action, doc_edit, save_doc, select};
+pub use doc::{DocAction, doc_action, doc_edit, save_doc, select};
 pub use links::open_url;
 pub use repo::{open_repo, start};
 pub use search::set_search;
@@ -97,6 +97,17 @@ pub struct RepoModel {
     _watcher: Option<watcher::RepoWatcher>,
 }
 
+impl RepoModel {
+    /// The `lastissue://` URL for issue `id` here.
+    pub fn link(&self, id: String) -> String {
+        crate::link::Link {
+            repo: self.repo.label.clone(),
+            issue: Some(id),
+        }
+        .to_url()
+    }
+}
+
 pub struct Workspace {
     pub repos: Vec<Repo>,
     pub repo: Option<RepoModel>,
@@ -115,7 +126,7 @@ pub struct Workspace {
     watch: bool,
 }
 
-/// The identity for a repo (GUI-SPEC §4): git config in its directory,
+/// The identity for a repo: git config in its directory,
 /// never the `$USER@host` fallback.
 fn identity_for(root: &Path) -> Identity {
     Identity::new(None, None).in_dir(root).without_fallback()

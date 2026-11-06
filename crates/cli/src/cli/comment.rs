@@ -29,8 +29,7 @@ fn print_comments(ctx: &mut Ctx, r: &IssueRef, msgs: &[Msg], keep: impl Fn(usize
             && keep(index)
         {
             let text = format::message_with(msg, &format::comment_headers(r, &msgs[0], &a));
-            let painted = format::paint(&text, ctx.color, false);
-            ctx.print(&painted);
+            ctx.paint(&text, false);
         }
     }
 }

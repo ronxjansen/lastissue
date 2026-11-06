@@ -13,7 +13,7 @@ use std::path::{Path, PathBuf};
 use ulid::Ulid;
 
 pub const MARKER: &str = ".lastissue";
-/// Conventional local root subdirectory; preferred over its parent (§2.1).
+/// Conventional local root subdirectory; preferred over its parent.
 pub const ISSUES_DIR: &str = "issues";
 
 // ---------------------------------------------------------------- Root
@@ -37,7 +37,7 @@ fn not_initialized(root: &Path, hint: &str) -> Error {
         .with("Hint", hint)
 }
 
-/// Resolve the issues root (§2.1): `--root` / `--repo` / `LASTISSUE_DIR`
+/// Resolve the issues root: `--root` / `--repo` / `LASTISSUE_DIR`
 /// (resolved by the caller, arriving via `flag`), nearest `.lastissue`
 /// upwards (at each level `issues/.lastissue` wins over `.lastissue`), then
 /// the global root.
@@ -71,13 +71,7 @@ pub fn discover(flag: Option<&Path>) -> Result<PathBuf> {
 }
 
 fn absolute(p: &Path) -> PathBuf {
-    if p.is_absolute() {
-        p.to_path_buf()
-    } else {
-        std::env::current_dir()
-            .map(|c| c.join(p))
-            .unwrap_or_else(|_| p.to_path_buf())
-    }
+    std::path::absolute(p).unwrap_or_else(|_| p.to_path_buf())
 }
 
 /// Directory a plain `lastissue init` uses: `./issues` if it exists, else cwd.
@@ -120,10 +114,7 @@ pub fn slugify(text: &str, max_words: usize, fallback: &str) -> String {
 
 /// Split `<slug>-<id>` (filename stem or folder name) into (slug, id).
 pub fn split_name(name: &str) -> Option<(&str, &str)> {
-    let (slug, id) = match name.rsplit_once('-') {
-        Some((s, i)) => (s, i),
-        None => ("", name),
-    };
+    let (slug, id) = name.rsplit_once('-').unwrap_or(("", name));
     (id.len() >= 6 && id.len() <= 8 && model::is_short_id(id)).then_some((slug, id))
 }
 
@@ -283,7 +274,7 @@ impl Store {
         Ok(out)
     }
 
-    /// All issues in path order (§6.4): root-level files first, then each
+    /// All issues in path order: root-level files first, then each
     /// project folder; filenames sorted within each folder.
     pub fn issues(&self) -> Result<Vec<IssueRef>> {
         let mut out = Vec::new();
@@ -301,10 +292,14 @@ impl Store {
     }
 
     pub fn read(&self, r: &IssueRef) -> Result<Vec<Msg>> {
-        let bytes = fs::read(&r.path)?;
-        let msgs = mbox::parse_mbox(&bytes)?;
+        self.parse(&r.path, &fs::read(&r.path)?)
+    }
+
+    /// Parse the bytes of the issue file at `path`; no messages is corrupt.
+    pub(crate) fn parse(&self, path: &Path, bytes: &[u8]) -> Result<Vec<Msg>> {
+        let msgs = mbox::parse_mbox(bytes)?;
         if msgs.is_empty() {
-            return Err(Error::validation("corrupt-file").with("Path", self.rel(&r.path)));
+            return Err(Error::validation("corrupt-file").with("Path", self.rel(path)));
         }
         Ok(msgs)
     }
@@ -353,10 +348,9 @@ impl Store {
     }
 
     pub fn issue_path(&self, project: Option<&Project>, slug: &str, id: &str) -> PathBuf {
-        let dir = project
-            .map(|p| p.dir.clone())
-            .unwrap_or_else(|| self.root.clone());
-        dir.join(format!("{slug}-{id}.mbox"))
+        project
+            .map_or(&self.root, |p| &p.dir)
+            .join(format!("{slug}-{id}.mbox"))
     }
 
     // ------------------------------------------------------------ resolution

@@ -1,4 +1,4 @@
-//! Repo registry (§2.7): a plain file of issue-root paths, so a GUI (or the
+//! Repo registry: a plain file of issue-root paths, so a GUI (or the
 //! CLI's `--repo`) can pick a root by label. Pointers only, never an index.
 //!
 //! Format: one canonical absolute path per line, insertion order; `#` comments

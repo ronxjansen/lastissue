@@ -294,8 +294,8 @@ pub fn reply_subject(title: &str) -> String {
     format!("Re: {title}")
 }
 
-/// A comment replying to the issue (or to a comment, extending References).
-pub fn comment(actor: &Actor, issue: &Msg, parent: Option<&Msg>, body: &str) -> Msg {
+/// A message replying to the issue (or to a comment, extending References).
+fn reply(actor: &Actor, issue: &Msg, parent: Option<&Msg>) -> Msg {
     let mut m = base_message(actor, &reply_subject(issue.get("Subject").unwrap_or("")));
     if let Some(p) = parent {
         m.set("In-Reply-To", p.message_id());
@@ -305,15 +305,18 @@ pub fn comment(actor: &Actor, issue: &Msg, parent: Option<&Msg>, body: &str) -> 
         m.set("In-Reply-To", issue.message_id());
         m.set("References", issue.message_id());
     }
+    m
+}
+
+pub fn comment(actor: &Actor, issue: &Msg, parent: Option<&Msg>, body: &str) -> Msg {
+    let mut m = reply(actor, issue, parent);
     set_content_headers(&mut m);
     m.body = mbox::normalize_body(body);
     m
 }
 
 pub fn event(actor: &Actor, issue: &Msg, kind: &str, lines: &[String]) -> Msg {
-    let mut m = base_message(actor, &reply_subject(issue.get("Subject").unwrap_or("")));
-    m.set("In-Reply-To", issue.message_id());
-    m.set("References", issue.message_id());
+    let mut m = reply(actor, issue, None);
     m.set("X-Issue-Event", kind);
     set_content_headers(&mut m);
     m.body = lines.join("\n");
@@ -324,7 +327,7 @@ pub fn is_event(m: &Msg) -> bool {
     m.has("X-Issue-Event")
 }
 
-/// Mark a body edit (§5.2): X-Edited always, X-Edited-By when the editor
+/// Mark a body edit: X-Edited always, X-Edited-By when the editor
 /// is not the author.
 pub fn mark_edited(m: &mut Msg, actor: &Actor) {
     m.set("X-Edited", &now_header());
@@ -539,7 +542,7 @@ pub fn comment_numbers(msgs: &[Msg]) -> Vec<Option<usize>> {
         .collect()
 }
 
-/// One entry of an issue's activity timeline (GUI-SPEC §5): each message
+/// One entry of an issue's activity timeline: each message
 /// after #1, in file order.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Activity<'a> {

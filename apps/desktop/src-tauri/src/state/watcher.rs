@@ -1,4 +1,4 @@
-//! Filesystem watcher for the open repo (GUI-SPEC §3): `notify` on the
+//! Filesystem watcher for the open repo: `notify` on the
 //! issues root, debounced on its own thread into [`Batch`]es of changed
 //! paths. What a batch means is decided in core (`index::reload`): issue
 //! files are re-read and diffed (an in-place rewrite of the last event is

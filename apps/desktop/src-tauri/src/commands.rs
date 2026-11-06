@@ -2,15 +2,14 @@
 //! Every command is `async`, so it runs off the main thread; results come
 //! back as values, and everything else is pushed as events.
 
-use crate::dto::{self, EditDto, GroupKeyDto, NewIssueDto, PickOptionDto, Snapshot};
+use crate::dto::{self, GroupKeyArg, NewIssueDto, Snapshot};
 use crate::format::error_line;
 use crate::keymap::UserKeymap;
-use crate::link::Link;
 use crate::state::draft::FieldKind;
-use crate::state::edit::Op;
-use crate::state::picker::{self, PickerKind};
+use crate::state::edit::{Edit, Op};
+use crate::state::picker::{self, PickOption, PickerKind};
 use crate::state::view_state::ViewState;
-use crate::state::workspace::{self as ws, SharedHub};
+use crate::state::workspace::{self as ws, DocAction, SharedHub};
 use std::sync::Mutex;
 use tauri::State;
 
@@ -69,18 +68,10 @@ async fn select(hub: Hub<'_>, id: Option<String>) -> Res {
     Ok(())
 }
 
-fn field(kind: &str) -> Res<FieldKind> {
-    match kind {
-        "title" => Ok(FieldKind::Title),
-        "body" => Ok(FieldKind::Body),
-        k => Err(format!("unknown field {k:?}")),
-    }
-}
-
 /// Returns whether a save is due.
 #[tauri::command]
-async fn doc_edit(hub: Hub<'_>, id: String, field_kind: String, text: String) -> Res<bool> {
-    Ok(ws::doc_edit(&hub, &id, field(&field_kind)?, &text))
+async fn doc_edit(hub: Hub<'_>, id: String, field_kind: FieldKind, text: String) -> Res<bool> {
+    Ok(ws::doc_edit(&hub, &id, field_kind, &text))
 }
 
 #[tauri::command]
@@ -90,18 +81,19 @@ async fn doc_save(hub: Hub<'_>) -> Res {
 }
 
 #[tauri::command]
-async fn doc_action(hub: Hub<'_>, action: String) -> Res {
-    ws::doc_action(&hub, &action)
+async fn doc_action(hub: Hub<'_>, action: DocAction) -> Res {
+    ws::doc_action(&hub, action);
+    Ok(())
 }
 
 #[tauri::command]
-async fn apply_edit(hub: Hub<'_>, ids: Vec<String>, edit: EditDto) -> Res {
-    ws::apply_to(&hub, &ids, &edit.to_edit()?)
+async fn apply_edit(hub: Hub<'_>, ids: Vec<String>, edit: Edit) -> Res {
+    ws::apply_to(&hub, &ids, &edit)
 }
 
 #[tauri::command]
-async fn drop_card(hub: Hub<'_>, ids: Vec<String>, target: GroupKeyDto) -> Res {
-    ws::drop_card(&hub, &ids, target.to_key()?)
+async fn drop_card(hub: Hub<'_>, ids: Vec<String>, target: GroupKeyArg) -> Res {
+    ws::drop_card(&hub, &ids, target.0)
 }
 
 #[tauri::command]
@@ -155,31 +147,19 @@ async fn rename_project(hub: Hub<'_>, project: String, name: String) -> Res<dto:
     ws::project_op(&hub, |s| lastissue::ops::rename_project(s, &project, &name))
 }
 
-fn picker_kind(kind: &str) -> Res<PickerKind> {
-    Ok(match kind {
-        "state" => PickerKind::State,
-        "priority" => PickerKind::Priority,
-        "assignee" => PickerKind::Assignee,
-        "labels" => PickerKind::Labels,
-        "due" => PickerKind::Due,
-        "project" => PickerKind::Project,
-        k => return Err(format!("unknown picker {k:?}")),
-    })
-}
-
 #[tauri::command]
-async fn picker_options(hub: Hub<'_>, kind: String, ids: Vec<String>) -> Res<Vec<PickOptionDto>> {
-    Ok(picker::options_for(&hub, picker_kind(&kind)?, &ids))
+async fn picker_options(hub: Hub<'_>, kind: PickerKind, ids: Vec<String>) -> Res<Vec<PickOption>> {
+    Ok(picker::options_for(&hub, kind, &ids))
 }
 
 #[tauri::command]
 async fn picker_typed(
     hub: Hub<'_>,
-    kind: String,
+    kind: PickerKind,
     ids: Vec<String>,
     query: String,
-) -> Res<Option<PickOptionDto>> {
-    Ok(picker::typed_for(&hub, picker_kind(&kind)?, &ids, &query))
+) -> Res<Option<PickOption>> {
+    Ok(picker::typed_for(&hub, kind, &ids, &query))
 }
 
 #[tauri::command]
@@ -213,12 +193,7 @@ async fn add_repo(hub: Hub<'_>, path: String) -> Res {
 #[tauri::command]
 async fn issue_link(hub: Hub<'_>, id: String) -> Res<String> {
     let ws = hub.lock();
-    let r = ws.repo.as_ref().ok_or("no repo is open")?;
-    Ok(Link {
-        repo: r.repo.label.clone(),
-        issue: Some(id),
-    }
-    .to_url())
+    Ok(ws.repo.as_ref().ok_or("no repo is open")?.link(id))
 }
 
 /// Create the user keymap file if needed and open it in the default editor.
