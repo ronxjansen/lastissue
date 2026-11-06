@@ -29,6 +29,20 @@ Needs Rust (pinned in `rust-toolchain.toml`) and, for the desktop app, pnpm.
   list of allows. Every crate sets `[lints] workspace = true`.
 - No async and no database anywhere.
 
+## Releasing
+
+Releases are automated with [release-please](https://github.com/googleapis/release-please).
+Write commits as [Conventional Commits](https://www.conventionalcommits.org/)
+(`feat:`, `fix:`, `perf:`, `feat!:` for breaking changes). On every push to
+`master`, release-please keeps a release PR open that bumps the version
+(workspace `Cargo.toml`, `Cargo.lock`, `package.json`, `tauri.conf.json`) and
+updates [`CHANGELOG.md`](CHANGELOG.md). Merging that PR tags `vX.Y.Z`, creates
+the GitHub release and attaches CLI binaries (macOS arm64/x86_64, Linux x86_64)
+and an unsigned macOS `.dmg`.
+
+Before 1.0, `feat` and breaking changes bump the minor version; `fix` and
+`perf` bump the patch version.
+
 ## Out of scope (v1)
 
 JSON output, attachments, locks, a merge driver, auto-commits, auto-expiry,
