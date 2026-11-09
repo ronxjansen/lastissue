@@ -6,7 +6,7 @@
 <script lang="ts">
   import { api, type PickerKind, type PickOption } from "$lib/api";
   import { app, report } from "$lib/app.svelte";
-  import { PRIORITY_LABEL, STATE_LABEL } from "$lib/format";
+  import { titled } from "$lib/format";
   import { rank } from "$lib/fuzzy";
   import CheckIcon from "@lucide/svelte/icons/check";
   import FuzzyList from "./FuzzyList.svelte";
@@ -26,13 +26,6 @@
   let options = $state<PickOption[]>([]);
   let typed = $state<PickOption | null>(null);
   let asked = 0;
-
-  // State and priority come labelled with their value; title them here.
-  function titled(o: PickOption): PickOption {
-    if (o.edit.kind === "state") return { ...o, label: STATE_LABEL[o.edit.value] };
-    if (o.edit.kind === "priority") return { ...o, label: PRIORITY_LABEL[o.edit.value ?? "none"] };
-    return o;
-  }
 
   // On open, and when the index changes under us (e.g. a label toggled).
   $effect(() => {

@@ -106,8 +106,8 @@ Needs Rust (version pinned in `rust-toolchain.toml`) and, for the desktop app, p
 ```sh
 git clone https://github.com/ronxjansen/lastissue
 cd lastissue
-make install   # CLI into ~/.cargo/bin
-make bundle    # desktop app: target/release/bundle/
+make build     # CLI and desktop app
+make install   # CLI into ~/.cargo/bin, app into /Applications
 ```
 
 ## Built for AI agents
@@ -169,10 +169,10 @@ Comments and history are more messages in the same file. The full format is in
 
 | Command | Does |
 |---|---|
-| `make install` | Installs `lastissue` into `~/.cargo/bin` |
+| `make install` | Installs `lastissue` into `~/.cargo/bin` and the app built by `make build` into `/Applications` |
 | `make dev` | Runs the desktop app with hot reload |
 | `make bundle` | Builds an unsigned `lastissue.app` and `.dmg` under `target/release/bundle/` |
-| `make build` | Release builds of the CLI and the app, no bundle |
+| `make build` | Release builds of the CLI and `lastissue.app` (no `.dmg`) |
 | `make test` | `cargo test --workspace`, then `svelte-check` and `vitest` |
 | `make bench` | Core scale benchmarks (10k and 100k synthetic issues) |
 

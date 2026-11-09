@@ -4,7 +4,7 @@ Date: Mon, 2 Nov 2026 16:32:06 +0100
 From: Ron Jansen <ronxjansen@gmail.com>
 Sender: Claude Code <claude@agent>
 Subject: Attachments: content-addressed .assets/ with inline images
-X-Issue-State: todo
+X-Issue-State: backlog
 Keywords: feature, cli, gui
 Content-Type: text/markdown; charset=utf-8
 Content-Transfer-Encoding: 8bit
@@ -84,4 +84,17 @@ Content-Type: text/markdown; charset=utf-8
 Content-Transfer-Encoding: 8bit
 
 Not started: no core::asset module, no `asset add/gc`, no `--attach`, no GUI paste/drop/picker or image rendering, no importer upload download, SPEC/GUI-SPEC not updated.
+
+From qw7xxf@lastissue Fri Nov  6 11:50:26 2026
+Message-ID: <01M6R7PCHV0QWT7165NJQW7XXF@lastissue>
+Date: Fri, 6 Nov 2026 11:50:26 +0100
+From: Ron Jansen <ronxjansen@gmail.com>
+Subject: Re: Attachments: content-addressed .assets/ with inline images
+In-Reply-To: <01M6EE78E23EF3QGRDJN6A40W3@lastissue>
+References: <01M6EE78E23EF3QGRDJN6A40W3@lastissue>
+X-Issue-Event: update
+Content-Type: text/markdown; charset=utf-8
+Content-Transfer-Encoding: 8bit
+
+state: todo → backlog
 

@@ -26,7 +26,7 @@ import {
 } from "./api";
 import { SORT_LABEL } from "./format";
 import { type Action, type Context, type Keymap, merge } from "./keymap";
-import { type Columns, horizontal, locate, toggle, vertical } from "./nav";
+import { type Columns, horizontal, locate, range, toggle, vertical } from "./nav";
 
 /** Title/body edits save this long after the last keystroke. */
 const SAVE_DEBOUNCE_MS = 300;
@@ -123,8 +123,12 @@ class App {
 
   /** Keyboard position (short ID). */
   cursor = $state<string | null>(null);
-  /** Issues `x` selected (short IDs). */
-  selection = $state<string[]>([]);
+  /** Selected issues (short IDs), in the order they were added. Replaced
+   *  wholesale, never mutated, so membership is O(1) at any size. */
+  selection = $state.raw<ReadonlySet<string>>(new Set());
+  /** Where a shift range starts, and the selection before the range run
+   *  began (so ⇧k after ⇧j shrinks it back). Reset by any other change. */
+  private anchor: { id: string; base: ReadonlySet<string> } | null = null;
   /** Where issue commands go: the list/board or the detail pane. */
   focus = $state<"issues" | "detail">("issues");
   overlay = $state<Overlay | null>(null);
@@ -223,8 +227,38 @@ class App {
   }
 
   private pruneSelection() {
-    if (this.selection.some((id) => !this.byId.has(id)))
-      this.selection = this.selection.filter((id) => this.byId.has(id));
+    for (const id of this.selection)
+      if (!this.byId.has(id)) {
+        this.select([...this.selection].filter((x) => this.byId.has(x)));
+        return;
+      }
+  }
+
+  /** Replace the selection (ends any shift range). */
+  select(ids: Iterable<string>) {
+    this.anchor = null;
+    this.selection = new Set(ids);
+  }
+
+  /** Shift-click / ⇧j: select from the anchor (the cursor when the run
+   *  started) to `id`, on top of what was selected before, and move there. */
+  extendTo(id: string) {
+    const from = this.anchor?.id ?? this.cursor;
+    const base = this.anchor?.base ?? this.selection;
+    const span = range(this.columns(), from, id);
+    if (!span.length) return;
+    const next = new Set(base);
+    for (const x of span) next.add(x);
+    this.selection = next;
+    // A range that fell back to one issue (other column) starts a new run.
+    this.anchor = { id: span.length === 1 ? id : from!, base };
+    this.cursor = id;
+  }
+
+  /** The issues a drag, or a menu on `id`, acts on: the whole selection
+   *  when `id` is in it, else just `id`. */
+  heldWith(id: string): string[] {
+    return this.selection.has(id) ? [...this.selection] : [id];
   }
 
   /** The issues an issue command acts on: the open one when the detail
@@ -232,7 +266,7 @@ class App {
   targets(): string[] {
     const open = this.doc?.id ?? null;
     if (this.focus === "detail" && open) return [open];
-    if (this.selection.length) return [...this.selection];
+    if (this.selection.size) return [...this.selection];
     const t = this.cursor ?? open;
     return t ? [t] : [];
   }
@@ -248,6 +282,7 @@ class App {
   // ------------------------------------------------------- open issue
 
   open(id: string | null) {
+    this.anchor = null;
     if (id) {
       this.cursor = id;
       const k = this.byId.get(id);
@@ -258,7 +293,8 @@ class App {
 
   clickIssue(id: string, e: MouseEvent) {
     this.focus = "issues";
-    if (e.metaKey) {
+    if (e.shiftKey) this.extendTo(id);
+    else if (e.metaKey) {
       this.cursor = id;
       this.run("toggleSelect");
     } else this.open(id);
@@ -305,9 +341,22 @@ class App {
     return write(() => api.applyEdit(ids, edit)).catch(report);
   }
 
+  /** Drop on a board column or a list group header: set that group's value. */
   dropCard(id: string, target: GroupKey) {
-    const ids = this.selection.includes(id) ? [...this.selection] : [id];
+    const ids = this.heldWith(id);
     write(() => api.dropCard(ids, target)).catch(report);
+  }
+
+  /** Drop on a sidebar project (null: No project). */
+  dropOnProject(id: string, project: string | null) {
+    this.edit(this.heldWith(id), { kind: "project", value: project });
+  }
+
+  copyIds(ids: string[]) {
+    const text = ids.join(" ");
+    writeText(text)
+      .then(() => toast.success(ids.length === 1 ? `Copied ${text}` : `Copied ${ids.length} IDs`))
+      .catch(report);
   }
 
   createIssue(issue: NewIssue) {
@@ -344,8 +393,7 @@ class App {
 
   // ---------------------------------------------------------- actions
 
-  pick(picker: PickerKind) {
-    const ids = this.targets();
+  pick(picker: PickerKind, ids = this.targets()) {
     if (ids.length) this.overlay = { kind: "picker", picker, ids };
   }
 
@@ -360,6 +408,7 @@ class App {
 
   private moveCursor(next: string | null) {
     if (!next) return;
+    this.anchor = null;
     this.cursor = next;
     if (this.doc && this.doc.id !== next) this.open(next);
   }
@@ -424,14 +473,29 @@ class App {
         return this.closeDoc();
       case "toggleSelect": {
         if (!this.cursor) this.cursor = vertical(this.columns(), null, 1);
-        if (this.cursor) this.selection = toggle(this.selection, this.cursor);
+        if (this.cursor) {
+          this.anchor = null;
+          this.selection = toggle(this.selection, this.cursor);
+        }
+        return;
+      }
+      case "extendDown":
+      case "extendUp": {
+        const cols = this.columns();
+        if (!this.cursor || !locate(cols, this.cursor)) {
+          const first = vertical(cols, null, 1);
+          if (first) this.extendTo(first);
+          return;
+        }
+        const next = vertical(cols, this.cursor, a === "extendDown" ? 1 : -1);
+        if (next) this.extendTo(next);
         return;
       }
       case "selectAll":
-        this.selection = this.columns().flat();
+        this.select(this.columns().flat());
         return;
       case "clearSelection":
-        if (this.selection.length) this.selection = [];
+        if (this.selection.size) this.select([]);
         else if (this.doc) this.closeDoc();
         return;
       case "moveCardPrev":
@@ -482,7 +546,7 @@ class App {
           detail: "The issue file is removed from disk. This cannot be undone here.",
           confirm: "Delete",
           run: () => {
-            this.selection = [];
+            this.select([]);
             write(() => api.deleteIssues(ids)).catch(report);
           },
         };
@@ -521,7 +585,7 @@ class App {
 
   switchRepo(i: number) {
     this.cursor = null;
-    this.selection = [];
+    this.select([]);
     this.focus = "issues";
     serial(() => api.openRepo(i)).catch(report);
   }

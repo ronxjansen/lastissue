@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { Scope } from "$lib/api";
   import { app } from "$lib/app.svelte";
+  import { dropTarget } from "$lib/drag";
   import { pretty } from "$lib/keymap";
   import * as ContextMenu from "$lib/components/ui/context-menu";
   import * as DropdownMenu from "$lib/components/ui/dropdown-menu";
@@ -24,6 +25,17 @@
   function go(scope: Scope) {
     app.setView({ scope });
     app.focus = "issues";
+  }
+
+  /** The project an issue is dragged over ("" for No project). */
+  let over = $state<string | null>(null);
+  /** Dropping issues on a project moves them there (null: out of any). */
+  function target(project: string | null) {
+    const key = project ?? "";
+    return dropTarget(
+      (on) => (over = on ? key : over === key ? null : over),
+      (id) => app.dropOnProject(id, project),
+    );
   }
 
   const item = "flex h-8 w-full items-center gap-2.5 rounded-md px-2.5 text-left text-[14px] text-ink-2 transition-colors duration-100 hover:bg-wash hover:text-ink";
@@ -76,7 +88,8 @@
       <ContextMenu.Root>
         <ContextMenu.Trigger>
           <button
-            class="{item} {active({ kind: 'project', project: p.id }) ? on : ''}"
+            {...target(p.id)}
+            class="{item} {active({ kind: 'project', project: p.id }) ? on : ''} {over === p.id ? 'bg-mark-soft!' : ''}"
             onclick={() => go({ kind: "project", project: p.id })}
           >
             <FolderClosed class="size-4 shrink-0 opacity-75" /><span class="flex-1 truncate capitalize">{p.name}</span>
@@ -93,7 +106,7 @@
         </ContextMenu.Content>
       </ContextMenu.Root>
     {/each}
-    <button class="{item} {active({ kind: 'noProject' }) ? on : ''}" onclick={() => go({ kind: "noProject" })}>
+    <button {...target(null)} class="{item} {active({ kind: 'noProject' }) ? on : ''} {over === '' ? 'bg-mark-soft!' : ''}" onclick={() => go({ kind: "noProject" })}>
       <Inbox class="size-4 shrink-0 opacity-75" /><span class="flex-1">No project</span>
       <span class={count}>{counts.noProject || ""}</span>
     </button>

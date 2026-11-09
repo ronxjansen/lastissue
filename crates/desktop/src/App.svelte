@@ -9,10 +9,12 @@
   import CreateDialog from "$lib/components/app/CreateDialog.svelte";
   import Detail from "$lib/components/app/Detail.svelte";
   import IssueList from "$lib/components/app/IssueList.svelte";
+  import IssueMenu from "$lib/components/app/IssueMenu.svelte";
   import Palette from "$lib/components/app/Palette.svelte";
   import Picker from "$lib/components/app/Picker.svelte";
   import PromptDialog from "$lib/components/app/PromptDialog.svelte";
   import SearchBox from "$lib/components/app/SearchBox.svelte";
+  import SelectionBar from "$lib/components/app/SelectionBar.svelte";
   import Sidebar from "$lib/components/app/Sidebar.svelte";
   import StatusBar from "$lib/components/app/StatusBar.svelte";
   import Toolbar from "$lib/components/app/Toolbar.svelte";
@@ -48,7 +50,7 @@
     <Sidebar />
     <main class="@container flex min-w-0 flex-1 flex-col overflow-hidden">
       <Toolbar />
-      <div class="min-h-0 flex-1" role="grid" tabindex="-1" onfocusin={() => (app.focus = "issues")}>
+      <div class="relative min-h-0 flex-1" role="grid" tabindex="-1" onfocusin={() => (app.focus = "issues")}>
         {#if !ready}
           <div class="grid h-full place-items-center text-sm {failed ? 'text-danger' : 'text-muted-foreground'}">{failed ?? "Loading…"}</div>
         {:else if app.meta.current === null}
@@ -58,10 +60,15 @@
               <button class="rounded-md border px-3 py-1.5 text-foreground hover:bg-accent" onclick={() => app.run("addRepo")}>Open a folder…</button>
             </div>
           </div>
-        {:else if app.visible.view.mode === "board"}
-          <Board />
         {:else}
-          <IssueList />
+          <IssueMenu>
+            {#if app.visible.view.mode === "board"}<Board />{:else}<IssueList />{/if}
+          </IssueMenu>
+          {#if app.selection.size > 1}
+            <div class="pointer-events-none absolute inset-x-0 bottom-3 flex justify-center px-4">
+              <SelectionBar />
+            </div>
+          {/if}
         {/if}
       </div>
     </main>

@@ -1,15 +1,17 @@
 <script lang="ts">
   import type { Summary } from "$lib/api";
   import { app } from "$lib/app.svelte";
+  import { startDrag } from "$lib/drag";
   import { ago, day, firstName } from "$lib/format";
   import Bot from "@lucide/svelte/icons/bot";
+  import Check from "@lucide/svelte/icons/check";
   import MessageSquare from "@lucide/svelte/icons/message-square";
   import PriorityIcon from "./PriorityIcon.svelte";
   import StateIcon from "./StateIcon.svelte";
 
   let { s }: { s: Summary } = $props();
   const cursor = $derived(app.cursor === s.id);
-  const selected = $derived(app.selection.includes(s.id));
+  const selected = $derived(app.selection.has(s.id));
   const open = $derived(app.doc?.id === s.id);
   const fresh = $derived(app.fresh.has(s.key));
   const overdue = $derived(s.due !== null && s.due < Date.now() && s.open);
@@ -19,15 +21,25 @@
 <div
   role="row"
   tabindex="-1"
+  draggable="true"
+  data-issue={s.id}
+  ondragstart={(e) => startDrag(e, s.id, s.title)}
   onclick={(e) => app.clickIssue(s.id, e)}
-  class="group relative flex h-full cursor-default items-center gap-3 border-b border-rule-soft pr-5 pl-6 text-[14px] transition-colors duration-100
-    {open ? 'bg-wash-strong' : selected ? 'bg-link/8' : 'hover:bg-wash'}"
+  aria-selected={selected}
+  class="group relative flex h-full cursor-default items-center gap-3 border-b pr-5 pl-6 text-[14px] transition-colors duration-100
+    {selected
+    ? `border-select-rule ${open ? 'bg-select-strong' : 'bg-select hover:bg-select-strong'}`
+    : `border-rule-soft ${open ? 'bg-wash-strong' : 'hover:bg-wash'}`}"
 >
-  {#if cursor && app.focus === "issues"}
-    <span class="absolute top-1/2 left-2 h-4 w-[3px] -translate-y-1/2 rounded-full bg-link" aria-hidden="true"></span>
-  {/if}
   {#if selected}
-    <span class="absolute top-1/2 left-[13px] size-1.5 -translate-y-1/2 rounded-full bg-link" aria-label="Selected"></span>
+    <!-- Held: a filled check in the gutter. On the cursor row it gains a
+         ring, so the cursor never hides behind the selection. -->
+    <span
+      class="absolute top-1/2 left-[5px] grid size-[14px] -translate-y-1/2 place-items-center rounded-[4px] bg-link text-sheet
+        {cursor && app.focus === 'issues' ? 'ring-2 ring-link/35 ring-offset-1 ring-offset-paper' : ''}"
+      aria-hidden="true"><Check class="size-[11px]" strokeWidth={3.25} /></span>
+  {:else if cursor && app.focus === "issues"}
+    <span class="absolute top-1/2 left-2 h-4 w-[3px] -translate-y-1/2 rounded-full bg-link" aria-hidden="true"></span>
   {/if}
   <span class="grid w-3.5 shrink-0 place-items-center">
     {#if s.priority}<PriorityIcon priority={s.priority} />{/if}

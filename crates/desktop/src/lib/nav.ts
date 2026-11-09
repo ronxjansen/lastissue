@@ -1,7 +1,7 @@
 // Keyboard navigation over the visible issues: plain
 // functions over columns of IDs (the list is one column in display order,
 // the board one column per group). The cursor is the keyboard's position;
-// the selection is the set `x` toggles; the open issue is separate.
+// the selection is the set `x` toggles (and shift extends); the open issue is separate.
 
 export type Columns = string[][];
 
@@ -39,7 +39,20 @@ export function horizontal(cols: Columns, cursor: string | null, step: number): 
   return cols[c][r] ?? null;
 }
 
-/** Toggle `id` in the ordered selection. */
-export function toggle(sel: string[], id: string): string[] {
-  return sel.includes(id) ? sel.filter((x) => x !== id) : [...sel, id];
+/** Toggle `id` in the selection (a new Set; insertion order is kept). */
+export function toggle(sel: ReadonlySet<string>, id: string): Set<string> {
+  const out = new Set(sel);
+  if (!out.delete(id)) out.add(id);
+  return out;
+}
+
+/** The issues from `from` to `to`, inclusive, in display order, within
+ *  `to`'s column. If `from` is elsewhere (another column, gone), just `to`. */
+export function range(cols: Columns, from: string | null, to: string): string[] {
+  const b = locate(cols, to);
+  if (!b) return [];
+  const a = from ? locate(cols, from) : null;
+  if (!a || a[0] !== b[0]) return [to];
+  const [lo, hi] = a[1] < b[1] ? [a[1], b[1]] : [b[1], a[1]];
+  return cols[b[0]].slice(lo, hi + 1);
 }

@@ -149,10 +149,10 @@ Light and dark get equal care and follow the OS (`.dark` class). Dark is not an 
 A warm-neutral greyscale at hue 95 carrying four semantic inks; everything not stateful stays ink on paper.
 
 ### Primary
-- **Link Blue** (`link`): the single accent. Text links in prose, the keyboard cursor bar on list rows, the selection dot and selected-row tint (`link` at 8%, 6% on board cards), the board cursor ring (2px), focus outlines (70% mix), caret colour, checkbox accent, and the Done state. Dark mode lifts it to `oklch(0.75 0.13 266)`.
+- **Link Blue** (`link`): the single accent. Text links in prose, the keyboard cursor bar on list rows, the selection check (a filled 14px link square with a sheet-coloured check) and the select tint (`select`, `link` at 11%; 15% in dark; `select-strong` on hover or when the held row is also open; `select-rule` between held rows; held cards add a 45% link border), the board cursor ring (2px), focus outlines (70% mix), caret colour, checkbox accent, and the Done state. Dark mode lifts it to `oklch(0.75 0.13 266)`.
 
 ### Secondary
-- **Highlighter Lime** (`mark`, `mark-soft`, `mark-ink`): the one playful ink. Used for exactly four things: titles of issues changed on disk since last opened (a lower-half swipe that draws in once over 640ms), text selection (`mark-soft`), the repo badge in the sidebar (`mark` ground, `mark-ink` letter), and the board column drop target (`mark-soft` wash). In dark mode the fresh mark recolours the text to `mark` with a thin underline swipe, because a band behind light text reads as a strikethrough.
+- **Highlighter Lime** (`mark`, `mark-soft`, `mark-ink`): the one playful ink. Used for exactly four things: titles of issues changed on disk since last opened (a lower-half swipe that draws in once over 640ms), text selection (`mark-soft`), the repo badge in the sidebar (`mark` ground, `mark-ink` letter), and drop targets while an issue is dragged: board columns, list group headers, and sidebar projects (`mark-soft` wash). In dark mode the fresh mark recolours the text to `mark` with a thin underline swipe, because a band behind light text reads as a strikethrough.
 
 ### Tertiary
 - **State inks**: In Progress Amber (`state-progress`), In Review Violet (`state-review`), Done uses Link Blue, Urgent Orange (`urgent`) fills the urgent priority square. Backlog, Todo, Cancelled, and Duplicate are ink-3.
@@ -200,7 +200,7 @@ A warm-neutral greyscale at hue 95 carrying four semantic inks; everything not s
 
 A three-column desktop shell: sidebar (224px, 176px below 1000px viewport), the list or board in a flexible `main`, and the detail sheet at `min(50%, 760px)` with a 340px floor. Top bars are 44px and double as window drag regions; the status bar is 28px on rail.
 
-The list is a virtualised column of 40px rows with a 24px left gutter (the cursor bar and selection dot live in it). Group headers share the row height and sit bottom-aligned on paper with a rule underneath. The board is 19rem columns of 82px cards on a 90px pitch, divided by soft rules.
+The list is a virtualised column of 40px rows with a 24px left gutter (the cursor bar and selection check live in it; on a held row the check replaces the bar and the cursor shows as a ring around the check). Group headers share the row height and sit bottom-aligned on paper with a rule underneath. The board is 19rem columns of 82px cards on a 90px pitch, divided by soft rules.
 
 Responsiveness is container-driven, not viewport-driven. `main` is a size container: row meta reveals progressively as it widens (ID at @xs, due date and age at @sm, comments at @md, agent glyph at @lg, assignee at @2xl, labels at @3xl, project at @4xl), and the toolbar sheds count, view toggle, sort label, and button text the same way. The detail article is its own container; its mail header block is one label/value column pair until @lg, then two.
 
@@ -218,7 +218,7 @@ Flat at rest. Depth comes from the paper steps and hairline rules; the only shad
 
 ## Shapes
 
-Small, gentle corners from a single 0.45rem radius: md (about 5px) for buttons, inputs, nav items, and hover targets; lg for banners, board cards, the composer, and editing wells; xl for the palette and dialogs. Inline code is 4px, code blocks and images 6px. Circles are reserved for state icons, the activity spine marks, the cursor bar's ends, and the selection dot. Borders are 1px hairlines, used as dividers far more than as enclosures.
+Small, gentle corners from a single 0.45rem radius: md (about 5px) for buttons, inputs, nav items, and hover targets; lg for banners, board cards, the composer, and editing wells; xl for the palette and dialogs. Inline code is 4px, code blocks and images 6px. Circles are reserved for state icons, the activity spine marks, the cursor bar's ends, and the selection count in the status bar. Borders are 1px hairlines, used as dividers far more than as enclosures.
 
 ## Components
 
@@ -256,8 +256,11 @@ One 1px rule runs the length of the thread at the left. Marks encode the entry: 
 ### Board Card
 Sheet ground, rule border, `rounded.lg`, two-line clamped title over an ink-3 meta line ending in the mono ID. Hover deepens the border, open is ink-3 at 60%, cursor is a 2px link ring, the drop column washes lime.
 
+### Selection Bar
+While two or more issues are held, a 40px sheet bar floats 12px above the bottom of the list or board, centred: the count in mono link ink (the bar's only accent), a hairline divider, ghost buttons for Status, Priority, Project, Labels and Assignee with their keys in 11px mono ink-3, and Clear. Rule border, `rounded.lg`, Pop shadow (it floats). The list and board pad their ends by its height so the last row stays reachable; the status bar's count steps aside while it shows.
+
 ### Popovers, Menus, Palette
-Sheet ground, rule ring, Pop shadow; menus `rounded.md`, palette and dialogs `rounded.xl`. The palette has a 48px borderless query line over a rule, options at 14px ink-2 with wash-strong highlight, and a paper footer for hints.
+Sheet ground, rule ring, Pop shadow; menus `rounded.md`, palette and dialogs `rounded.xl`. The issue context menu heads with what it acts on (`3 issues`, or the ID and title) in muted text, and its submenus show the same options and checks as the pickers. The palette has a 48px borderless query line over a rule, options at 14px ink-2 with wash-strong highlight, and a paper footer for hints.
 
 ### Reading Markdown
 Links are link blue with a 40% underline at 3px offset that solidifies on hover. Quotes are a column of mono `>` in ink-3 at 70% with ink-2 text. Code is mono at 0.86em on wash. Horizontal rules render as a centred `· · ·`. Tables use rule bottom borders and an ink-3 rule under the head, tabular numerals.

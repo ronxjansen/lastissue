@@ -1,0 +1,43 @@
+From zrysty@lastissue Fri Nov  6 11:50:17 2026
+Message-ID: <01M6R7P3JD503PVQFCP4ZRYSTY@lastissue>
+Date: Fri, 6 Nov 2026 11:50:17 +0100
+From: Ron Jansen <ronxjansen@gmail.com>
+To: Ron Jansen <ronxjansen@gmail.com>
+Subject: Support remote sharing
+X-Issue-State: backlog
+X-Edited: Fri, 6 Nov 2026 11:51:56 +0100
+Content-Type: text/markdown; charset=utf-8
+Content-Transfer-Encoding: 8bit
+
+To fully implement the vision we need to also support remote sharing issues using any mail server.
+
+* [ ] How is authentication members handled?
+* [ ] How to handle admin related metadata/settings?
+
+From 5pwqrs@lastissue Fri Nov  6 11:50:21 2026
+Message-ID: <01M6R7P7GVQHVVYWZ1795PWQRS@lastissue>
+Date: Fri, 6 Nov 2026 11:50:21 +0100
+From: Ron Jansen <ronxjansen@gmail.com>
+Subject: Re: Support remote sharing
+In-Reply-To: <01M6R7P3JD503PVQFCP4ZRYSTY@lastissue>
+References: <01M6R7P3JD503PVQFCP4ZRYSTY@lastissue>
+X-Issue-Event: update
+Content-Type: text/markdown; charset=utf-8
+Content-Transfer-Encoding: 8bit
+
+state: backlog → todo
+body: edited
+
+From np52wf@lastissue Mon Nov  9 10:28:38 2026
+Message-ID: <01M6ZT6RTHP5PBMG7XBSNP52WF@lastissue>
+Date: Mon, 9 Nov 2026 10:28:38 +0100
+From: Ron Jansen <ronxjansen@gmail.com>
+Subject: Re: Support remote sharing
+In-Reply-To: <01M6R7P3JD503PVQFCP4ZRYSTY@lastissue>
+References: <01M6R7P3JD503PVQFCP4ZRYSTY@lastissue>
+X-Issue-Event: update
+Content-Type: text/markdown; charset=utf-8
+Content-Transfer-Encoding: 8bit
+
+state: todo → backlog
+

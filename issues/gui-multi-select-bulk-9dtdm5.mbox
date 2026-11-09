@@ -1,0 +1,58 @@
+From 9dtdm5@lastissue Mon Nov  9 10:15:05 2026
+Message-ID: <01M6ZSDZ1QDNWSE49YJX9DTDM5@lastissue>
+Date: Mon, 9 Nov 2026 10:15:05 +0100
+From: Ron Jansen <ronxjansen@gmail.com>
+Sender: Claude Code <claude@agent>
+Subject: GUI: multi-select bulk edits (range select, context menu, action bar, list drag)
+X-Issue-State: done
+Keywords: feature, gui
+Content-Type: text/markdown; charset=utf-8
+Content-Transfer-Encoding: 8bit
+
+Make it easy to select many issues in the desktop GUI and change them all at once, by mouse as well as by keyboard.
+
+## What exists today
+
+- `x` and ⌘-click toggle an issue in or out of the selection, and there is a select-all.
+- The pickers (status, priority, project, labels) apply to every selected issue (`app.targets()` → `applyEdit`).
+- On the board, dragging a selected card moves the whole selection (`dropCard`).
+- Selected issues are now clearly marked: a tint, a check in the gutter or card corner, a count in the status bar, and a stacked drag preview.
+
+## Scope
+
+### 1. Range selection
+- Shift-click selects every issue from the cursor to the clicked one. In the list it follows visible order; on the board it stays within one column.
+- ⇧j / ⇧k (and ⇧↑ / ⇧↓) extend the selection from the keyboard. Check for clashes with the existing ⇧h / ⇧l board bindings.
+
+### 2. Right-click menu
+- Right-clicking a row or card opens a context menu (shadcn `context-menu`, as in `Sidebar.svelte`).
+- If the clicked issue is in the selection, the menu acts on the whole selection, and its header says so ("3 issues"). Otherwise it acts on that issue alone and leaves the selection as it is.
+- Items: Status ▸, Priority ▸, Project ▸, Labels ▸, Assignee ▸, Copy IDs, Close.
+
+### 3. Selection action bar
+- While 2 or more issues are selected, a slim bar floats above the status bar with the count, buttons for Status, Priority, Project, Labels and Assignee (each opens the same picker), and Clear (Esc).
+- It must not cover the last row; pad the list while it is shown.
+- Keep it calm (monochrome chrome, link accent only for the count), per DESIGN.md.
+
+### 4. Drag in the list view
+- Rows become draggable. Dragging a selected row carries the whole selection and reuses the board's stacked drag preview.
+- Drop targets: a project in the sidebar (sets the project) and a group header in a grouped list (sets that group's value: state, priority, ...).
+- Drop targets get the `mark-soft` wash, as board columns do.
+
+## Notes
+- Every bulk change goes through one `applyEdit(ids, edit)`, so it logs one event per issue, exactly as `issue update` would.
+- The app has to stay fast at 50k issues: range selection and select-all must not do O(n²) `includes` checks. Make `selection` a Set, or keep a Set index next to it.
+
+From vq480z@lastissue Mon Nov  9 10:28:17 2026
+Message-ID: <01M6ZT64EE07AQ1X121CVQ480Z@lastissue>
+Date: Mon, 9 Nov 2026 10:28:17 +0100
+From: Ron Jansen <ronxjansen@gmail.com>
+Subject: Re: GUI: multi-select bulk edits (range select, context menu, action bar, list drag)
+In-Reply-To: <01M6ZSDZ1QDNWSE49YJX9DTDM5@lastissue>
+References: <01M6ZSDZ1QDNWSE49YJX9DTDM5@lastissue>
+X-Issue-Event: update
+Content-Type: text/markdown; charset=utf-8
+Content-Transfer-Encoding: 8bit
+
+state: backlog → done
+

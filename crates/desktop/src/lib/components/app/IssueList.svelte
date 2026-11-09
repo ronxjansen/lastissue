@@ -1,6 +1,7 @@
 <script lang="ts">
   import { app } from "$lib/app.svelte";
-  import { groupLabel } from "$lib/format";
+  import { dropTarget } from "$lib/drag";
+  import { groupKeyId, groupLabel } from "$lib/format";
   import GroupIcon from "./GroupIcon.svelte";
   import IssueRow from "./IssueRow.svelte";
   import VirtualList from "./VirtualList.svelte";
@@ -18,14 +19,27 @@
     return out;
   });
 
+  /** The group header an issue is being dragged over. */
+  let over = $state<string | null>(null);
+
   const cursorRow = $derived(rows.findIndex((r) => r.kind === "issue" && app.atCursor(r.key)));
 </script>
 
 {#if rows.length}
-  <VirtualList items={rows} rowHeight={40} scrollTo={cursorRow} class="h-full">
+  <VirtualList items={rows} rowHeight={40} scrollTo={cursorRow} padEnd={app.selection.size > 1 ? 56 : 0} class="h-full">
     {#snippet row(r)}
       {#if r.kind === "header"}
-        <div class="flex h-full items-end gap-2 border-b border-rule bg-paper pb-2 pl-11 text-[12.5px] font-bold text-ink-2">
+        {@const gid = groupKeyId(r.key)}
+        <!-- Dropping an issue here sets this group's value, as on the board. -->
+        <div
+          role="rowheader"
+          tabindex="-1"
+          {...dropTarget(
+            (on) => (over = on ? gid : over === gid ? null : over),
+            (id) => app.dropCard(id, r.key),
+          )}
+          class="flex h-full items-end gap-2 border-b border-rule pb-2 pl-11 text-[12.5px] font-bold text-ink-2 transition-colors duration-150 {over === gid ? 'bg-mark-soft' : 'bg-paper'}"
+        >
           <GroupIcon key={r.key} />
           {groupLabel(r.key)}
           <span class="font-mono text-[12px] font-normal text-ink-3">{r.count}</span>

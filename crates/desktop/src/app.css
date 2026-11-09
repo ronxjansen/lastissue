@@ -24,6 +24,9 @@
 	--wash: oklch(0.948 0.003 95);
 	--wash-strong: oklch(0.925 0.004 95);
 	--link: oklch(0.52 0.19 266);
+	--select: oklch(0.52 0.19 266 / 0.11);
+	--select-strong: oklch(0.52 0.19 266 / 0.18);
+	--select-rule: oklch(0.52 0.19 266 / 0.2);
 	--mark: oklch(0.925 0.165 118);
 	--mark-soft: oklch(0.925 0.165 118 / 0.45);
 	--mark-ink: oklch(0.3 0.06 118);
@@ -74,6 +77,9 @@
 	--wash: oklch(1 0 0 / 0.05);
 	--wash-strong: oklch(1 0 0 / 0.085);
 	--link: oklch(0.75 0.13 266);
+	--select: oklch(0.75 0.13 266 / 0.15);
+	--select-strong: oklch(0.75 0.13 266 / 0.23);
+	--select-rule: oklch(0.75 0.13 266 / 0.24);
 	--mark: oklch(0.87 0.16 118);
 	--mark-soft: oklch(0.87 0.16 118 / 0.32);
 	--mark-ink: oklch(0.25 0.05 118);
@@ -101,6 +107,9 @@
 	--color-wash: var(--wash);
 	--color-wash-strong: var(--wash-strong);
 	--color-link: var(--link);
+	--color-select: var(--select);
+	--color-select-strong: var(--select-strong);
+	--color-select-rule: var(--select-rule);
 	--color-mark: var(--mark);
 	--color-mark-soft: var(--mark-soft);
 	--color-mark-ink: var(--mark-ink);
@@ -388,4 +397,52 @@ kbd {
 :is(.md, .md-editor .ProseMirror) img {
 	border-radius: 6px;
 	max-width: 100%;
+}
+
+/* A held (multi-selected) board card: the select tint laid over the
+   sheet so the card stays opaque above the column. */
+.card-selected {
+	background: linear-gradient(var(--select), var(--select)), var(--sheet);
+	border-color: color-mix(in oklch, var(--link) 45%, transparent);
+}
+
+/* The drag ghost for a multi-card drag: a small stack with a count. */
+.drag-stack {
+	position: fixed;
+	top: -1000px;
+	left: -1000px;
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	max-width: 18rem;
+	padding: 8px 12px;
+	border-radius: 0.45rem;
+	background: var(--sheet);
+	color: var(--ink);
+	font-size: 13px;
+	border: 1px solid color-mix(in oklch, var(--link) 45%, transparent);
+	box-shadow:
+		0 1px 0 0 var(--sheet),
+		0 4px 0 -1px var(--sheet),
+		0 4px 0 0 var(--rule),
+		0 8px 0 -2px var(--sheet),
+		0 8px 0 -1px var(--rule),
+		0 10px 24px -8px oklch(0 0 0 / 0.25);
+}
+.drag-stack b {
+	display: grid;
+	place-items: center;
+	min-width: 20px;
+	height: 20px;
+	padding: 0 6px;
+	border-radius: 9999px;
+	background: var(--link);
+	color: var(--sheet);
+	font: 600 12px/1 var(--font-mono, ui-monospace);
+	font-variant-numeric: tabular-nums;
+}
+.drag-stack span {
+	overflow: hidden;
+	white-space: nowrap;
+	text-overflow: ellipsis;
 }

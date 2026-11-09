@@ -3,7 +3,7 @@ Message-ID: <01M6E9QTY7N01HB2K6XQ8TSRZQ@lastissue>
 Date: Mon, 2 Nov 2026 15:13:46 +0100
 From: Ron Jansen <ronxjansen@gmail.com>
 Subject: M6: Benchmarks, app bundle, URL scheme
-X-Issue-State: todo
+X-Issue-State: cancelled
 Keywords: gui
 List-Id: gui <t8kn8q.lastissue>
 X-Parent: <01M6E0ZQH7HXSTPPB4PTB7H9FP@lastissue>
@@ -51,4 +51,17 @@ Content-Type: text/markdown; charset=utf-8
 Content-Transfer-Encoding: 8bit
 
 Done: criterion benches (scan/view/fulltext/by_id/activity, 10k/100k), `make bundle` (.app + .dmg), `lastissue://` deep link. Still open: record the perf numbers in docs/GUI-SPEC.md, and code signing + notarization.
+
+From 8skn1s@lastissue Mon Nov  9 10:28:34 2026
+Message-ID: <01M6ZT6N67X6792HDXR18SKN1S@lastissue>
+Date: Mon, 9 Nov 2026 10:28:34 +0100
+From: Ron Jansen <ronxjansen@gmail.com>
+Subject: Re: M6: Benchmarks, app bundle, URL scheme
+In-Reply-To: <01M6E9QTY7N01HB2K6XQ8TSRZQ@lastissue>
+References: <01M6E9QTY7N01HB2K6XQ8TSRZQ@lastissue>
+X-Issue-Event: update
+Content-Type: text/markdown; charset=utf-8
+Content-Transfer-Encoding: 8bit
+
+state: todo → cancelled
 
