@@ -45,6 +45,7 @@ pub fn handler() -> impl Fn(tauri::ipc::Invoke) -> bool + Send + Sync + 'static 
         search,
         open_repo,
         add_repo,
+        init_repo,
         issue_link,
         open_keymap_file,
     ]
@@ -185,11 +186,44 @@ async fn open_repo(hub: Hub<'_>, index: usize) -> Res {
 }
 
 /// Register a folder (a root, or a dir containing `issues/`) and open it.
+/// Returns false, changing nothing, when the folder isn't initialized, so
+/// the UI can offer [`init_repo`].
 #[tauri::command]
-async fn add_repo(hub: Hub<'_>, path: String) -> Res {
-    let repo =
-        lastissue::registry::add(std::path::Path::new(&path)).map_err(|e| error_line(&e))?;
+async fn add_repo(hub: Hub<'_>, path: String) -> Res<bool> {
+    let repo = match lastissue::registry::add(std::path::Path::new(&path)) {
+        Ok(r) => r,
+        Err(e) if e.kind == "not-a-root" => return Ok(false),
+        Err(e) => return Err(error_line(&e)),
+    };
     hub.lock().repos = lastissue::registry::load().map_err(|e| error_line(&e))?;
+    ws::open_repo(&hub, repo)?;
+    Ok(true)
+}
+
+/// Initialize lastissue in `path` (as `<path>/issues`, unless it already is
+/// an `issues` folder), or the global root when `path` is None, then open it.
+#[tauri::command]
+async fn init_repo(hub: Hub<'_>, path: Option<String>) -> Res {
+    use lastissue::{registry, store};
+    let err = |e: lastissue::error::Error| error_line(&e);
+    let repo = if let Some(p) = path {
+        let p = std::path::PathBuf::from(p);
+        let root = if p.file_name().is_some_and(|n| n == store::ISSUES_DIR) {
+            p
+        } else {
+            p.join(store::ISSUES_DIR)
+        };
+        store::init(&root).map_err(err)?;
+        registry::add(&root).map_err(err)?
+    } else {
+        store::init(&store::global_root().map_err(err)?).map_err(err)?;
+        registry::load()
+            .map_err(err)?
+            .into_iter()
+            .find(|r| r.global)
+            .ok_or("no global root on this platform")?
+    };
+    hub.lock().repos = registry::load().map_err(err)?;
     ws::open_repo(&hub, repo)
 }
 

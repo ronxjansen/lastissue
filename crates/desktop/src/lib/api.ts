@@ -261,7 +261,10 @@ export const api = {
     invoke<PickOption | null>("picker_typed", { kind, ids, query }),
   search: (query: string) => invoke<void>("search", { query }),
   openRepo: (index: number) => invoke<void>("open_repo", { index }),
-  addRepo: (path: string) => invoke<void>("add_repo", { path }),
+  /** False when the folder isn't initialized (nothing changed). */
+  addRepo: (path: string) => invoke<boolean>("add_repo", { path }),
+  /** Initialize `path` (as `path/issues`), or the global root when null, and open it. */
+  initRepo: (path: string | null) => invoke<void>("init_repo", { path }),
   issueLink: (id: string) => invoke<string>("issue_link", { id }),
   openKeymapFile: () => invoke<string>("open_keymap_file"),
 };

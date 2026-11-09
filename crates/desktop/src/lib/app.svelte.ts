@@ -4,7 +4,7 @@
 // Every user command goes through `run(action)`.
 
 import { writeText } from "@tauri-apps/plugin-clipboard-manager";
-import { open as openDialog } from "@tauri-apps/plugin-dialog";
+import { ask, open as openDialog } from "@tauri-apps/plugin-dialog";
 import { SvelteMap, SvelteSet } from "svelte/reactivity";
 import { toast } from "svelte-sonner";
 import {
@@ -564,10 +564,20 @@ class App {
       }
       case "addRepo":
         openDialog({ directory: true, title: "Open an issues folder or a repo containing one" })
-          .then((path) => {
-            if (path) return serial(() => api.addRepo(path));
+          .then(async (path) => {
+            if (!path || (await serial(() => api.addRepo(path)))) return;
+            const issues = /[\\/]issues$/.test(path) ? path : `${path}/issues`;
+            const ok = await ask(`${path} isn't set up for lastissue yet. Create ${issues} and start tracking issues there?`, {
+              title: "Initialize lastissue",
+              okLabel: "Initialize",
+              cancelLabel: "Cancel",
+            });
+            if (ok) return serial(() => api.initRepo(path));
           })
           .catch(report);
+        return;
+      case "useGlobalRoot":
+        serial(() => api.initRepo(null)).catch(report);
         return;
       case "openSettings":
         api

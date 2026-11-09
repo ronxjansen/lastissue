@@ -56,8 +56,16 @@
         {:else if app.meta.current === null}
           <div class="grid h-full place-items-center">
             <div class="max-w-sm text-center text-sm text-muted-foreground">
-              <p class="mb-3">{app.meta.notice ?? "No issues root open."}</p>
-              <button class="rounded-md border px-3 py-1.5 text-foreground hover:bg-accent" onclick={() => app.run("addRepo")}>Open a folder…</button>
+              {#if app.meta.notice}
+                <p class="mb-3 text-danger">{app.meta.notice}</p>
+              {:else}
+                <p class="mb-1 text-base text-foreground">No issues folder open</p>
+                <p class="mb-4">Open a repo to track its issues next to the code. lastissue creates an <code>issues/</code> folder if it doesn't have one yet.</p>
+              {/if}
+              <div class="flex justify-center gap-2">
+                <button class="rounded-md border bg-accent px-3 py-1.5 text-foreground hover:bg-accent/80" onclick={() => app.run("addRepo")}>Open a folder…</button>
+                <button class="rounded-md border px-3 py-1.5 text-foreground hover:bg-accent" onclick={() => app.run("useGlobalRoot")}>Use a personal inbox</button>
+              </div>
             </div>
           </div>
         {:else}

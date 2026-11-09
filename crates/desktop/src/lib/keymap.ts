@@ -49,6 +49,7 @@ export const ACTIONS = {
   newProject: "New project…",
   renameProject: "Rename project…",
   addRepo: "Add repo…",
+  useGlobalRoot: "Open personal inbox (global)",
   openSettings: "Open settings (keymap file)",
   switchRepo1: "Switch to repo 1",
   switchRepo2: "Switch to repo 2",

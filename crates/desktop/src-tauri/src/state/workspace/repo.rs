@@ -16,11 +16,34 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
 /// The repo to open first: an explicit root (argument, `LASTISSUE_DIR`),
-/// else discovery from the current directory up to the global root.
-fn initial_repo(arg: Option<&Path>, repos: &[Repo]) -> Result<Repo> {
+/// else a local root discovered from the current directory, else the last
+/// repo the GUI opened, else the global root, else the first registered repo
+/// that still exists. A launch from Finder starts in `/`, so discovery alone
+/// would rarely find anything.
+/// `Ok(None)`: nothing is set up yet (the UI shows its welcome).
+fn initial_repo(arg: Option<&Path>, repos: &[Repo]) -> Result<Option<Repo>> {
     let env = std::env::var_os("LASTISSUE_DIR").map(PathBuf::from);
-    let root = store::discover(arg.or(env.as_deref()))?;
-    Ok(repo_for(&root, repos))
+    let explicit = arg.or(env.as_deref());
+    let last = || {
+        std::fs::read_to_string(last_file()?)
+            .ok()
+            .map(|s| repo_for(Path::new(s.trim()), repos))
+            .filter(Repo::exists)
+    };
+    match store::discover(explicit) {
+        Err(e) if explicit.is_some() => Err(e),
+        Ok(root) if explicit.is_some() || !store::global_root().is_ok_and(|g| g == root) => {
+            Ok(Some(repo_for(&root, repos)))
+        }
+        r => Ok(last()
+            .or_else(|| r.ok().map(|g| repo_for(&g, repos)))
+            .or_else(|| repos.iter().find(|r| r.exists()).cloned())),
+    }
+}
+
+/// One-line file next to the registry holding the root the GUI opened last.
+fn last_file() -> Option<PathBuf> {
+    registry::path().ok().map(|p| p.with_file_name("last"))
 }
 
 /// The registry entry for `root`, or an ad-hoc one.
@@ -44,7 +67,12 @@ pub fn start(hub: &SharedHub, arg: Option<PathBuf>) {
         Err(e) => (Vec::new(), Some(error_line(&e))),
     };
     match initial_repo(arg.as_deref(), &repos) {
-        Ok(repo) => {
+        Ok(None) => {
+            let mut ws = hub.lock();
+            ws.repos = repos;
+            ws.notice = notice;
+        }
+        Ok(Some(repo)) => {
             if !repos.iter().any(|r| r.root == repo.root) {
                 repos.insert(0, repo.clone());
             }
@@ -75,6 +103,13 @@ pub fn open_repo(hub: &SharedHub, repo: Repo) -> std::result::Result<(), String>
         .unwrap_or_else(|_| repo.root.clone());
     let store = Store::new(root);
     let mut ws = hub.lock();
+    // ponytail: best-effort; a lost write just falls back to discovery.
+    // Gated on `watch` so tests (which don't watch) leave the real file alone.
+    if ws.watch
+        && let Some(f) = last_file()
+    {
+        let _ = std::fs::write(f, store.root.as_os_str().as_encoded_bytes());
+    }
     let (w, rx, failure) = match ws.watch.then(|| watcher::watch(&store.root)) {
         Some(Ok((w, rx))) => (Some(w), Some(rx), None),
         Some(Err(e)) => (None, None, Some(format!("not watching: {e}"))),
